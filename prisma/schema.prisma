@@ -1,0 +1,182 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Tablas necesarias para NextAuth (Autenticación) ---
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Tablas principales del Sistema ---
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BoardPosition {
+  PRESIDENTE
+  SECRETARIO
+  TESORERO
+}
+
+// Configuración del Año Escolar
+model SchoolYear {
+  id             String      @id @default(cuid())
+  year           Int         @unique // Ej: 2026
+  className      String      // Ej: "7 Básico B" o "8 Básico B"
+  isActive       Boolean     @default(false) // Solo un año debería estar activo a la vez
+  initialBalance Float       @default(0)     // Saldo a favor/contra del año anterior
+  quotaAmount    Float       // Monto de la cuota regular
+  totalQuotas    Int         // Cantidad de cuotas en el año (ej: 10)
+  teacherName    String?     // Nombre del profesor(a) jefe
+  
+  // Relaciones históricas
+  payments       Payment[]
+  expenses       Expense[]
+  activities     Activity[]
+  extraFees      ExtraFee[]
+}
+
+// Tabla de Usuarios
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String?        @unique
+  emailVerified DateTime?
+  image         String?
+  
+  role          Role           @default(USER) 
+  boardPosition BoardPosition? 
+  
+  accounts      Account[]
+  sessions      Session[]
+  students      Student[]      
+  payments      Payment[]
+  comments      Comment[]      // Relación con los comentarios creados por este usuario
+}
+
+// Tabla de Alumnos
+model Student {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  isActive    Boolean  @default(true) 
+  
+  parents     User[]   
+  payments    Payment[]
+}
+
+// Cobros Extraordinarios (Ej: Cumpleaños, Paseos)
+model ExtraFee {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?    @db.Text
+  amount       Float
+  dueDate      DateTime?
+  
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  payments     Payment[]
+}
+
+// Tabla de Pagos (Cuotas regulares o Extraordinarios)
+model Payment {
+  id           String    @id @default(cuid())
+  amount       Float
+  date         DateTime  @default(now())
+  isVerified   Boolean   @default(false) 
+  receiptUrl   String?  
+  
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Restrict)
+  
+  quotaNumber  Int?      
+  extraFeeId   String?   
+  extraFee     ExtraFee? @relation(fields: [extraFeeId], references: [id], onDelete: SetNull)
+  
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  
+  studentId    String?  
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+}
+
+// Tabla de Gastos del Curso
+model Expense {
+  id           String     @id @default(cuid())
+  amount       Float
+  date         DateTime   @default(now())
+  concept      String   
+  receiptUrl   String?  
+  
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Restrict)
+}
+
+// Tabla de Actividades (Blog de novedades)
+model Activity {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?    @db.Text
+  date         DateTime
+  documentUrl  String?  
+  createdAt    DateTime   @default(now())
+  
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  comments     Comment[]  // Relación con los comentarios recibidos
+}
+
+// Tabla de Comentarios (Interacción tipo blog)
+model Comment {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
