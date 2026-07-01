@@ -1,3 +1,5 @@
+/* src/app/globals.css */
+
 @import "tailwindcss";
 
 :root {
@@ -10,11 +12,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Colores Corporativos - Colegio San Marcos */
+  --color-brand-navy: #0A1F44;
+  --color-brand-light: #EAEFF5;
+  --color-brand-accent: #D4AF37;
+  --color-brand-red: #f33827;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    /* Fondo oscuro con un leve tinte azul marino institucional */
+    --background: #050f24;
     --foreground: #ededed;
   }
 }
@@ -22,5 +31,53 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Priorizamos la fuente Geist que Next.js trae por defecto para un look moderno */
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Estilos para el Editor TipTap en modo edición */
+.tiptap-container .tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.tiptap ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.tiptap ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Estilos para cuando renderizamos las tarjetas del Muro */
+.muro-html h1 { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-bottom: 0.5rem; }
+.muro-html h2 { font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 0.25rem; }
+.muro-html ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+.muro-html ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
