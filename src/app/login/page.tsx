@@ -20,7 +20,7 @@ export default function LoginPage() {
 
       {/* Pie de página de la pantalla de login */}
       <footer className="mt-8 text-center text-xs text-gray-500">
-        &copy; {new Date().getFullYear()} Directiva de Apoderados. Todos los derechos reservados.
+        &copy; {new Date().getFullYear()} Generación 2031 B - CSM. Todos los derechos reservados.
       </footer>
     </main>
   );

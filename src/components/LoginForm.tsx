@@ -19,7 +19,7 @@ export default function LoginForm() {
       const result = await signIn("email", {
         email,
         redirect: false, // Evita recargar la página por completo
-        callbackUrl: "/dashboard", // Ruta a la que irá tras hacer clic en el correo
+        callbackUrl: "/", // Ruta a la que irá tras hacer clic en el correo
       });
 
       if (result?.error) {
@@ -77,7 +77,7 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-brand-navy hover:bg-opacity-90 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-all transform active:scale-[0.98] disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="w-full bg-brand-navy hover:bg-opacity-90 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-all transform active:scale-[0.98] disabled:bg-gray-400 cursor-pointer disabled:cursor-not-allowed"
         >
           {isLoading ? "Enviando..." : "Solicitar Enlace de Acceso"}
         </button>
