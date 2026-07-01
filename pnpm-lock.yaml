@@ -47,6 +47,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.27.1
         version: 3.27.1
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       '@uploadthing/react':
         specifier: ^7.3.3
         version: 7.3.3(next@16.2.9(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(uploadthing@7.7.4(next@16.2.9(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(tailwindcss@4.3.1))
@@ -65,6 +68,9 @@ importers:
       nodemailer:
         specifier: ^7.0.13
         version: 7.0.13
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
       react:
         specifier: 19.2.4
         version: 19.2.4

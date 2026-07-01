@@ -1,17 +1,17 @@
 // proxy.ts
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from 'pg'; // <-- 1. Importamos Pool nativo
 
-// Inicializamos Prisma usando el adaptador de PostgreSQL
-const pgAdapter = new PrismaPg({ 
-  connectionString: process.env.DATABASE_URL! 
-});
+// Inicializamos Prisma pasando el Pool correcto al adaptador
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+const pgAdapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter: pgAdapter });
 
-export default async function proxy(request: NextRequest) {
+// 2. ¡EL CAMBIO CRUCIAL! Debe ser una exportación nombrada (sin la palabra "default")
+export async function proxy(request: NextRequest) {
   // 1. Buscamos la cookie de sesión de NextAuth (maneja entornos locales y producción HTTPS)
   const sessionToken = 
     request.cookies.get('next-auth.session-token')?.value || 
@@ -24,13 +24,18 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. Verificamos en la base de datos si la sesión es válida (¡Gracias al entorno Node de Next 16!)
-  const session = await prisma.session.findUnique({
-    where: { sessionToken },
-  });
+  // 2. Verificamos en la base de datos si la sesión es válida
+  try {
+    const session = await prisma.session.findUnique({
+      where: { sessionToken },
+    });
 
-  // Si la sesión no existe o ya expiró
-  if (!session || session.expires < new Date()) {
+    // Si la sesión no existe o ya expiró
+    if (!session || session.expires < new Date()) {
+      return NextResponse.redirect(loginUrl);
+    }
+  } catch (error) {
+    console.error("Error validando la sesión en el proxy:", error);
     return NextResponse.redirect(loginUrl);
   }
 
