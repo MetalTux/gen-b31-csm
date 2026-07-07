@@ -4,33 +4,33 @@ import type { NextRequest } from 'next/server';
 
 // OJO: Restauramos el "export default" para que Next.js lo reconozca automáticamente.
 export default function proxy(request: NextRequest) {
-  // 1. Solo miramos si el usuario trae la cookie en la mano (súper rápido, sin consultar la BD)
+  const { pathname } = request.nextUrl;
+  
+  // 1. ¡SUPER IMPORTANTE!: Si el usuario ya va hacia el login, déjalo pasar libremente.
+  // Esto rompe por completo el bucle infinito de redirecciones.
+  if (pathname === '/login') {
+    return NextResponse.next();
+  }
+
+  // 2. Miramos si el usuario trae la cookie (tanto para HTTP local como HTTPS de Vercel)
   const sessionToken = 
     request.cookies.get('next-auth.session-token')?.value || 
     request.cookies.get('__Secure-next-auth.session-token')?.value;
 
-  const loginUrl = new URL('/login', request.url);
-
-  // 2. Si no trae la cookie, le cerramos la puerta de inmediato
+  // 3. Si no trae la cookie, directo al login
   if (!sessionToken) {
-    console.log("🔒 Acceso denegado por el Proxy: Redirigiendo al login.");
+    console.log("🔒 Acceso denegado por el Middleware: Redirigiendo al login.");
+    const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 3. Si la trae, lo dejamos pasar. El layout.tsx se encargará de validar la sesión real con Prisma.
+  // 4. Si la trae, continúa hacia la ruta solicitada
   return NextResponse.next();
 }
 
 export const config = {
-  // Protegemos todo el sitio EXCEPTO el login y los archivos estáticos
+  // Mantenemos tu matcher que filtra assets pesados, APIs e imágenes
   matcher: [
-    /*
-     * Aplica el middleware a todas las rutas EXCEPTO:
-     * - api (rutas de la API)
-     * - _next/static (archivos estáticos de Next.js)
-     * - _next/image (optimización de imágenes de Next.js)
-     * - archivos con extensión de imagen (.png, .jpg, .svg, .ico)
-     */
     '/((?!api|_next/static|_next/image|.*\\.png$|.*\\.ico$).*)',
   ],
 };
