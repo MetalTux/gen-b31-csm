@@ -4,7 +4,9 @@
 import { useState } from "react";
 import { deleteActivity } from "@/app/actions/activity";
 import ActivityForm from "./ActivityForm";
-import ConfirmModal from "./ConfirmModal"; // <-- Importamos nuestro nuevo Modal
+import CommentSection, { CommentWithUser } from "./CommentSection";
+import ConfirmModal from "./ConfirmModal"; 
+import AlertModal, { AlertType } from "./AlertModal";
 import { Pencil, Trash2 } from "lucide-react";
 
 interface ActivityCardProps {
@@ -13,16 +15,25 @@ interface ActivityCardProps {
     title: string;
     description: string;
     createdAt: Date;
+    comments: CommentWithUser[];
   };
   userRole: string;
+  currentUserId: string;
 }
 
-export default function ActivityCard({ activity, userRole }: ActivityCardProps) {
+export default function ActivityCard({ activity, userRole, currentUserId }: ActivityCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, setIsPending] = useState(false);
   
   // NUEVO ESTADO: Controla si el modal de confirmación está abierto
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    type: AlertType;
+    title: string;
+    message: string;
+  }>({ isOpen: false, type: "success", title: "", message: "" });
 
   // Esta función ahora solo abre el Modal
   const requestDelete = () => setIsModalOpen(true);
@@ -34,7 +45,12 @@ export default function ActivityCard({ activity, userRole }: ActivityCardProps) 
       await deleteActivity(activity.id);
       // No necesitamos cerrar el modal ni poner isPending en false porque el componente se destruirá al recargar el muro
     } catch (error) {
-      alert("Error al eliminar la publicación y sus archivos adjuntos.");
+      setAlertConfig({
+        isOpen: true,
+        type: "error",
+        title: "Error de Sistema",
+        message: "Error al eliminar la publicación y sus archivos adjuntos."
+      });
       setIsPending(false);
       setIsModalOpen(false);
     }
@@ -95,6 +111,14 @@ export default function ActivityCard({ activity, userRole }: ActivityCardProps) 
           className="text-gray-700 whitespace-pre-wrap muro-html pl-2 text-sm md:text-base break-words"
           dangerouslySetInnerHTML={{ __html: activity.description || "" }}
         />
+
+        {/* SECCIÓN DE COMENTARIOS CONECTADA */}
+        <CommentSection 
+          activityId={activity.id}
+          comments={activity.comments || []}
+          currentUserId={currentUserId}
+          userRole={userRole}
+        />
       </article>
 
       {/* RENDERIZAMOS EL MODAL INVISIBLE HASTA QUE SE SOLICITE */}
@@ -105,6 +129,15 @@ export default function ActivityCard({ activity, userRole }: ActivityCardProps) 
         onConfirm={executeDelete}
         onCancel={() => setIsModalOpen(false)}
         isPending={isPending}
+      />
+      
+      {/* RENDERIZAMOS EL MODAL AL FINAL */}
+      <AlertModal 
+        isOpen={alertConfig.isOpen}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
       />
     </>
   );

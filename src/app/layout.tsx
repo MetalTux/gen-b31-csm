@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "@uploadthing/react/styles.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";

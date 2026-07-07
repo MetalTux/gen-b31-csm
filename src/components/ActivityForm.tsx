@@ -6,6 +6,7 @@ import { createActivity, updateActivity, deleteFileByUrl } from "@/app/actions/a
 import RichTextEditor from "./RichTextEditor";
 import { uploadFiles } from "@/lib/uploadthing";
 import { Loader2 } from "lucide-react";
+import AlertModal, { AlertType } from "./AlertModal";
 
 // DEFINIMOS EL CONTRATO (PROPS) DEL FORMULARIO UNIVERSAL
 interface ActivityFormProps {
@@ -36,6 +37,13 @@ export default function ActivityForm({
   const [attachments, setAttachments] = useState<{ url: string; name: string }[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    type: AlertType;
+    title: string;
+    message: string;
+  }>({ isOpen: false, type: "success", title: "", message: "" });
+
   const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -51,7 +59,12 @@ export default function ActivityForm({
         setAttachments(prev => [...prev, ...newAttachments]);
       }
     } catch (error) {
-      alert("Error al adjuntar archivo (Máx 16MB).");
+      setAlertConfig({
+        isOpen: true,
+        type: "error",
+        title: "Error de Sistema",
+        message: "Error al adjuntar archivo (Máx 16MB)."
+      });
     } finally {
       setIsUploadingAttachment(false);
       if (fileAttachmentRef.current) fileAttachmentRef.current.value = "";
@@ -113,7 +126,12 @@ export default function ActivityForm({
 
       window.location.reload();
     } catch (error) {
-      alert("Hubo un error al procesar la publicación.");
+      setAlertConfig({
+        isOpen: true,
+        type: "error",
+        title: "Error de Sistema",
+        message: "Hubo un error al procesar la publicación."
+      });
     } finally {
       setIsPending(false);
     }
@@ -218,6 +236,15 @@ export default function ActivityForm({
           </button>
         </div>
       </div>
+            
+      {/* RENDERIZAMOS EL MODAL AL FINAL */}
+      <AlertModal 
+        isOpen={alertConfig.isOpen}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+      />
     </form>
   );
 }

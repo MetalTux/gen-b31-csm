@@ -18,12 +18,27 @@ export default async function Home() {
 
   const userRole = dbUser?.role ?? "USER";
   const userName = dbUser?.name ?? session?.user?.email;
+  const currentUserId = dbUser?.id ?? "";
 
   const activeYear = await prisma.schoolYear.findFirst({
     where: { isActive: true },
     include: {
       activities: {
         orderBy: { createdAt: "desc" },
+        include: {
+          comments: {
+            orderBy: { createdAt: "asc" }, // Los más antiguos primero, como en un chat
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -60,7 +75,8 @@ export default async function Home() {
                 ...activity, 
                 description: activity.description || ''
               }} 
-              userRole={userRole} 
+              userRole={userRole}
+              currentUserId={currentUserId}
             />
           ))
         )}

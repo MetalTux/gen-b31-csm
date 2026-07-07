@@ -21,6 +21,7 @@ import {
   List, ListOrdered, Link2, Image as Image2, 
   Heading1, Heading2, RotateCcw 
 } from "lucide-react";
+import AlertModal, { AlertType } from "./AlertModal";
 
 interface RichTextEditorProps {
   content: string;
@@ -31,6 +32,13 @@ interface RichTextEditorProps {
 export default function RichTextEditor({ content, onChange, placeholder = "Escribe aquí con formato..." }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    type: AlertType;
+    title: string;
+    message: string;
+  }>({ isOpen: false, type: "success", title: "", message: "" });
 
   const editor = useEditor({
     extensions: [
@@ -106,7 +114,12 @@ export default function RichTextEditor({ content, onChange, placeholder = "Escri
       }
     } catch (error) {
       console.error("Error al subir la imagen:", error);
-      alert("Hubo un problema al comprimir o subir la imagen.");
+      setAlertConfig({
+        isOpen: true,
+        type: "error",
+        title: "Error de Sistema",
+        message: "Hubo un problema al comprimir o subir la imagen."
+      });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -147,6 +160,15 @@ export default function RichTextEditor({ content, onChange, placeholder = "Escri
       <div className="p-4 max-h-[450px] overflow-y-auto tiptap-container">
         <EditorContent editor={editor} />
       </div>
+            
+      {/* RENDERIZAMOS EL MODAL AL FINAL */}
+      <AlertModal 
+        isOpen={alertConfig.isOpen}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+      />
     </div>
   );
 }

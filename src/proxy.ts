@@ -23,5 +23,14 @@ export default function proxy(request: NextRequest) {
 
 export const config = {
   // Protegemos todo el sitio EXCEPTO el login y los archivos estáticos
-  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * Aplica el middleware a todas las rutas EXCEPTO:
+     * - api (rutas de la API)
+     * - _next/static (archivos estáticos de Next.js)
+     * - _next/image (optimización de imágenes de Next.js)
+     * - archivos con extensión de imagen (.png, .jpg, .svg, .ico)
+     */
+    '/((?!api|_next/static|_next/image|.*\\.png$|.*\\.ico$).*)',
+  ],
 };
