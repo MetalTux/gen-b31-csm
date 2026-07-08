@@ -27,42 +27,49 @@ export default function Sidebar({ userRole }: { userRole: string }) {
 
   return (
     <>
-      {/* 1. BOTÓN DE HAMBURGUESA (Solo visible en móviles, oculto en PC con md:hidden) */}
+      {/* 1. BOTÓN DE HAMBURGUESA (MÓVIL) */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 transition-all active:scale-95"
+        className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 active:scale-95 transition-all"
         aria-label="Abrir menú"
       >
         <Menu size={24} />
       </button>
 
-      {/* 2. FONDO OSCURO (Solo se dibuja en móvil si isOpen es true) */}
+      {/* 2. FONDO OSCURO (MÓVIL) */}
       {isOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/60 z-[45] backdrop-blur-sm transition-opacity duration-300"
+          className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
-          aria-hidden="true"
         />
       )}
 
-      {/* 3. CONTENEDOR DEL MENÚ LATERAL (REFACTORIZADO) */}
+      {/* 3. MENÚ LATERAL */}
       <aside 
         className={`
-          /* COMPORTAMIENTO MÓVIL POR DEFECTO */
-          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl 
-          transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"} 
-
-          /* COMPORTAMIENTO ESCRITORIO (md: en adelante) */
           md:static md:translate-x-0 md:flex md:h-screen md:shadow-none
         `}
       >
-        {/* Encabezado del Menú con Logo */}
-        <div className="p-6 text-center border-b border-white/10 bg-black/20 relative shrink-0">
+        {/* ENCABEZADO REESTRUCTURADO SIN ABSOLUTE */}
+        <div className="p-4 border-b border-white/10 bg-black/20 shrink-0 flex flex-col">
           
-          {/* Logo del Colegio */}
-          <div className="relative w-28 h-32 mx-auto mb-2 drop-shadow-xl">
+          {/* Fila 1: Botón de Cerrar (Solo Móvil) - Tiene su propio espacio físico */}
+          <div className="w-full flex justify-end md:hidden mb-2">
+            <button 
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="p-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-xl text-gray-200 transition-all shadow-sm"
+              aria-label="Cerrar menú"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {/* Fila 2: Logo del Colegio (Centrado abajo del botón) */}
+          <div className="relative w-24 h-28 mx-auto drop-shadow-xl mb-2">
             <Image 
               src="/logocolegio.png"
               alt="Logo Portal Apoderados Colegio San Marcos"
@@ -72,16 +79,6 @@ export default function Sidebar({ userRole }: { userRole: string }) {
               priority
             />
           </div>
-          
-          {/* Botón de Cerrar (Oculto en PC con md:hidden, visible e interactivo en móvil) */}
-          <button 
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="md:hidden absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full z-50 text-gray-300 hover:text-white transition-all shadow-sm"
-            aria-label="Cerrar menú"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Enlaces de Navegación */}
@@ -90,7 +87,6 @@ export default function Sidebar({ userRole }: { userRole: string }) {
             Público General
           </p>
           
-          {/* Agregamos el setIsOpen(false) en cada clic para que el menú se auto-cierre al cambiar de página en móviles */}
           <Link onClick={() => setIsOpen(false)} href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/") ? "bg-brand-accent text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
             <Megaphone size={18} className={isActive("/") ? "text-brand-navy" : "text-brand-accent"} />
             Novedades y Anuncios
@@ -135,7 +131,6 @@ export default function Sidebar({ userRole }: { userRole: string }) {
           )}
         </nav>
 
-        {/* Botón de Cerrar Sesión */}
         <div className="p-4 border-t border-white/10 shrink-0 bg-black/10">
           <button
             type="button"
