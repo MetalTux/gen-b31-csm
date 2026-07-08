@@ -30,45 +30,50 @@ export default function Sidebar({ userRole }: { userRole: string }) {
       {/* 1. BOTÓN DE HAMBURGUESA (MÓVIL) */}
       <button
         type="button"
-        onClick={() => setIsOpen(false)}
+        onClick={() => setIsOpen(true)}
         className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 active:scale-95 transition-all"
         aria-label="Abrir menú"
       >
         <Menu size={24} />
       </button>
 
-      {/* 2. FONDO OSCURO (MÓVIL) */}
+      {/* 2. FONDO OSCURO EN MÓVIL (CIERRA AL TOCAR FUERA) */}
       {isOpen && (
         <div 
           className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
-          onClick={() => setIsOpen(true)}
+          onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* 3. MENÚ LATERAL */}
+      {/* 3. MENÚ LATERAL (SOLUCIÓN ANULADORA DE BUGS) */}
       <aside 
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
-          ${isOpen ? "translate-x-0" : "-translate-x-full"} 
-          md:static md:translate-x-0 md:flex md:h-screen md:shadow-none
+          /* Posicionamiento base para pantallas */
+          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex-col shadow-2xl h-screen
+          
+          /* LÓGICA MAESTRA INTERRUPTORA: 
+             Si está abierto: se muestra (flex).
+             Si está cerrado: se oculta por completo en móvil (hidden) pero se fuerza en PC (md:flex) 
+          */
+          ${isOpen ? "flex" : "hidden md:flex"}
         `}
       >
-        {/* ENCABEZADO REESTRUCTURADO SIN ABSOLUTE */}
+        {/* Encabezado del Menú */}
         <div className="p-4 border-b border-white/10 bg-black/20 shrink-0 flex flex-col">
           
-          {/* Fila 1: Botón de Cerrar (Solo Móvil) - Tiene su propio espacio físico */}
+          {/* Fila para el Botón de Cerrar (Solo visible en Móvil) */}
           <div className="w-full flex justify-end md:hidden mb-2">
             <button 
               type="button"
               onClick={() => setIsOpen(false)}
-              className="p-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-xl text-gray-200 transition-all shadow-sm"
+              className="p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-xl text-gray-200 transition-all shadow-sm"
               aria-label="Cerrar menú"
             >
-              <X size={24} />
+              <X size={22} />
             </button>
           </div>
 
-          {/* Fila 2: Logo del Colegio (Centrado abajo del botón) */}
+          {/* Logo del Colegio */}
           <div className="relative w-24 h-28 mx-auto drop-shadow-xl mb-2">
             <Image 
               src="/logocolegio.png"
@@ -131,6 +136,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
           )}
         </nav>
 
+        {/* Botón de Cerrar Sesión */}
         <div className="p-4 border-t border-white/10 shrink-0 bg-black/10">
           <button
             type="button"
