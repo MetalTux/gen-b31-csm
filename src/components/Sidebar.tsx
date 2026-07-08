@@ -27,35 +27,41 @@ export default function Sidebar({ userRole }: { userRole: string }) {
 
   return (
     <>
-      {/* 1. BOTÓN DE HAMBURGUESA (ABRIR MENÚ) */}
+      {/* 1. BOTÓN DE HAMBURGUESA (Solo visible en móviles, oculto en PC con md:hidden) */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
         className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 transition-all active:scale-95"
+        aria-label="Abrir menú"
       >
         <Menu size={24} />
       </button>
 
-      {/* 2. FONDO OSCURO (CIERRA EL MENÚ AL TOCAR FUERA) */}
+      {/* 2. FONDO OSCURO (Solo se dibuja en móvil si isOpen es true) */}
       {isOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/60 z-[45] backdrop-blur-sm cursor-pointer"
+          className="md:hidden fixed inset-0 bg-black/60 z-[45] backdrop-blur-sm transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* 3. CONTENEDOR DEL MENÚ LATERAL */}
+      {/* 3. CONTENEDOR DEL MENÚ LATERAL (REFACTORIZADO) */}
       <aside 
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
+          /* COMPORTAMIENTO MÓVIL POR DEFECTO */
+          fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl 
+          transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"} 
-          md:relative md:translate-x-0
+
+          /* COMPORTAMIENTO ESCRITORIO (md: en adelante) */
+          md:static md:translate-x-0 md:flex md:h-screen md:shadow-none
         `}
       >
+        {/* Encabezado del Menú con Logo */}
         <div className="p-6 text-center border-b border-white/10 bg-black/20 relative shrink-0">
           
-          {/* Logo */}
+          {/* Logo del Colegio */}
           <div className="relative w-28 h-32 mx-auto mb-2 drop-shadow-xl">
             <Image 
               src="/logocolegio.png"
@@ -67,14 +73,14 @@ export default function Sidebar({ userRole }: { userRole: string }) {
             />
           </div>
           
-          {/* BOTÓN DE CERRAR MEJORADO (Ahora con z-[100] extremo y type button) */}
+          {/* Botón de Cerrar (Oculto en PC con md:hidden, visible e interactivo en móvil) */}
           <button 
             type="button"
             onClick={() => setIsOpen(false)}
-            className="md:hidden absolute top-3 right-3 p-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full z-[100] text-gray-200 hover:text-white transition-all cursor-pointer shadow-md"
+            className="md:hidden absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full z-50 text-gray-300 hover:text-white transition-all shadow-sm"
             aria-label="Cerrar menú"
           >
-            <X size={22} />
+            <X size={20} />
           </button>
         </div>
 
@@ -84,6 +90,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
             Público General
           </p>
           
+          {/* Agregamos el setIsOpen(false) en cada clic para que el menú se auto-cierre al cambiar de página en móviles */}
           <Link onClick={() => setIsOpen(false)} href="/" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/") ? "bg-brand-accent text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
             <Megaphone size={18} className={isActive("/") ? "text-brand-navy" : "text-brand-accent"} />
             Novedades y Anuncios
@@ -128,6 +135,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
           )}
         </nav>
 
+        {/* Botón de Cerrar Sesión */}
         <div className="p-4 border-t border-white/10 shrink-0 bg-black/10">
           <button
             type="button"
