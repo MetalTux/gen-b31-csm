@@ -30,7 +30,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
       {/* 1. BOTÓN DE HAMBURGUESA (MÓVIL) */}
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => setIsOpen(false)}
         className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 active:scale-95 transition-all"
         aria-label="Abrir menú"
       >
@@ -41,7 +41,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
       {isOpen && (
         <div 
           className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
+          onClick={() => setIsOpen(true)}
         />
       )}
 
