@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import Image from "next/image"; // Importamos el optimizador de imágenes
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -15,11 +16,10 @@ export default function LoginForm() {
     setMessage(null);
 
     try {
-      // Inicia el flujo de autenticación por email con NextAuth
       const result = await signIn("email", {
         email,
-        redirect: false, // Evita recargar la página por completo
-        callbackUrl: "/", // Ruta a la que irá tras hacer clic en el correo
+        redirect: false,
+        callbackUrl: "/",
       });
 
       if (result?.error) {
@@ -32,7 +32,7 @@ export default function LoginForm() {
           type: "success",
           text: "¡Enlace enviado! Revisa tu bandeja de entrada (y la carpeta de spam) para iniciar sesión.",
         });
-        setEmail(""); // Limpiamos el campo
+        setEmail("");
       }
     } catch (error) {
       setMessage({
@@ -47,10 +47,20 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl border border-brand-light">
       <div className="text-center mb-8">
-        {/* Aquí simulamos un espacio para el escudo o logo */}
-        <div className="w-16 h-16 bg-brand-navy rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-          <span className="text-brand-accent font-bold text-xl">CSM</span>
+        
+        {/* --- NUEVO LOGO --- */}
+        <div className="relative w-28 h-32 mx-auto mb-4 drop-shadow-md">
+          <Image 
+            src="/logocolegio.png" 
+            alt="Logo Colegio San Marcos"
+            fill
+            className="object-contain"
+            sizes="(max-width: 768px) 100vw, 150px"
+            priority 
+          />
         </div>
+        {/* --- FIN DEL LOGO --- */}
+
         <h2 className="text-2xl font-bold text-brand-navy">Acceso de Apoderados</h2>
         <p className="text-sm text-gray-500 mt-1">
           Ingresa tu correo para recibir un enlace mágico de acceso directo. Sin contraseñas.
