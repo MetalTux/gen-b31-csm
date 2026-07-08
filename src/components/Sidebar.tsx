@@ -40,7 +40,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
       {/* 2. FONDO OSCURO EN MÓVIL (CIERRA AL TOCAR FUERA) */}
       {isOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+          className="hidden md:fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -55,7 +55,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
              Si está abierto: se muestra (flex).
              Si está cerrado: se oculta por completo en móvil (hidden) pero se fuerza en PC (md:flex) 
           */
-          ${isOpen ? "flex" : "hidden md:flex"}
+          ${isOpen ? "flex" : "md:hidden flex"}
         `}
       >
         {/* Encabezado del Menú */}
