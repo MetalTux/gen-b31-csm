@@ -27,20 +27,25 @@ export default function Sidebar({ userRole }: { userRole: string }) {
 
   return (
     <>
+      {/* 1. BOTÓN DE HAMBURGUESA (ABRIR MENÚ) */}
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-2 bg-brand-navy text-white rounded-lg shadow-md hover:bg-opacity-90 transition-all"
+        className="md:hidden fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-lg shadow-lg hover:bg-opacity-90 transition-all active:scale-95"
       >
         <Menu size={24} />
       </button>
 
+      {/* 2. FONDO OSCURO (CIERRA EL MENÚ AL TOCAR FUERA) */}
       {isOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity"
+          className="md:hidden fixed inset-0 bg-black/60 z-[45] backdrop-blur-sm cursor-pointer"
           onClick={() => setIsOpen(false)}
+          aria-hidden="true"
         />
       )}
 
+      {/* 3. CONTENEDOR DEL MENÚ LATERAL */}
       <aside 
         className={`
           fixed inset-y-0 left-0 z-50 w-64 bg-brand-navy text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out
@@ -50,17 +55,8 @@ export default function Sidebar({ userRole }: { userRole: string }) {
       >
         <div className="p-6 text-center border-b border-white/10 bg-black/20 relative shrink-0">
           
-          {/* --- BOTÓN DE CERRAR MEJORADO PARA MÓVILES --- */}
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="md:hidden absolute top-3 right-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-full z-50 text-gray-300 hover:text-white transition-all cursor-pointer"
-            aria-label="Cerrar menú"
-          >
-            <X size={22} />
-          </button>
-          {/* ------------------------------------------- */}
-
-          <div className="relative w-28 h-32 mx-auto mb-2 drop-shadow-xl hover:scale-105 transition-transform duration-300">
+          {/* Logo */}
+          <div className="relative w-28 h-32 mx-auto mb-2 drop-shadow-xl">
             <Image 
               src="/logocolegio.png"
               alt="Logo Portal Apoderados Colegio San Marcos"
@@ -70,8 +66,19 @@ export default function Sidebar({ userRole }: { userRole: string }) {
               priority
             />
           </div>
+          
+          {/* BOTÓN DE CERRAR MEJORADO (Ahora con z-[100] extremo y type button) */}
+          <button 
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="md:hidden absolute top-3 right-3 p-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full z-[100] text-gray-200 hover:text-white transition-all cursor-pointer shadow-md"
+            aria-label="Cerrar menú"
+          >
+            <X size={22} />
+          </button>
         </div>
 
+        {/* Enlaces de Navegación */}
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 mt-2 px-2">
             Público General
@@ -123,6 +130,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
 
         <div className="p-4 border-t border-white/10 shrink-0 bg-black/10">
           <button
+            type="button"
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white hover:shadow-md transition-all font-bold text-sm"
           >
