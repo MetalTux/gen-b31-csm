@@ -13,15 +13,15 @@ const pgAdapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter: pgAdapter });
 
 interface RenderPaymentInput {
-  amountPerItem: number;         // Cuánto cuesta cada cuota (ej: 10000)
-  receiptUrl: string;            // URL del comprobante en UploadThing
-  selectedQuotas: number[];      // Arreglo de números de cuotas (ej: [3, 4] para Marzo y Abril)
-  selectedExtraFeeIds: string[]; // Arreglo de IDs de cobros extraordinarios seleccionados
-  studentId: string;             // ID del alumno al que se le asigna el pago
+  amountPerItem: number;
+  receiptUrl: string;
+  selectedQuotas: number[];
+  selectedExtraFeeIds: string[];
+  studentId: string;
 }
 
 /**
- * 1. ACCIÓN: APODERADO RINDE UN PAGO (Soporta cuotas individuales o múltiples)
+ * 1. ACCIÓN: APODERADO RINDE UN PAGO
  */
 export async function renderPayments(input: RenderPaymentInput) {
   try {
@@ -36,31 +36,25 @@ export async function renderPayments(input: RenderPaymentInput) {
 
     const { amountPerItem, receiptUrl, selectedQuotas, selectedExtraFeeIds, studentId } = input;
 
-    // Ejecutamos todo dentro de una Transacción de Prisma. 
-    // Si una inserción falla, se cancela todo para evitar descuadres.
     await prisma.$transaction(async (tx) => {
-      
-      // FLUJO A: Si seleccionó cuotas regulares del año
       if (selectedQuotas && selectedQuotas.length > 0) {
         for (const quotaNum of selectedQuotas) {
           await tx.payment.create({
             data: {
               amount: amountPerItem,
               receiptUrl,
-              isVerified: false, // Queda pendiente hasta que el admin lo revise
+              isVerified: false,
               schoolYearId: activeYear.id,
               userId: user.id,
               studentId,
-              quotaNumber: quotaNum, // Guardamos qué número de cuota es (1 al 10)
+              quotaNumber: quotaNum,
             },
           });
         }
       }
 
-      // FLUJO B: Si seleccionó cobros extraordinarios (Extras)
       if (selectedExtraFeeIds && selectedExtraFeeIds.length > 0) {
         for (const extraId of selectedExtraFeeIds) {
-          // Buscamos el monto exacto de ese cobro extra para no confiar en lo que envíe el cliente
           const extraFee = await tx.extraFee.findUnique({ where: { id: extraId } });
           if (!extraFee) throw new Error("Uno de los cobros extras seleccionados no existe.");
 
@@ -72,7 +66,7 @@ export async function renderPayments(input: RenderPaymentInput) {
               schoolYearId: activeYear.id,
               userId: user.id,
               studentId,
-              extraFeeId: extraId, // Vinculamos al cobro extra correspondiente
+              extraFeeId: extraId,
             },
           });
         }
@@ -88,7 +82,7 @@ export async function renderPayments(input: RenderPaymentInput) {
 }
 
 /**
- * 2. ACCIÓN: ADMINISTRADOR VERIFICA UN PAGO (Aprobación)
+ * 2. ACCIÓN: ADMINISTRADOR VERIFICA UN PAGO
  */
 export async function verifyPayment(paymentId: string) {
   try {
@@ -115,24 +109,24 @@ interface CreatePresentialPaymentInput {
   selectedQuotas: number[];
   selectedExtraFeeIds: string[];
   studentId: string;
+  paymentDate: Date;
+  paymentMethod: "EFECTIVO" | "TRANSFERENCIA MANUAL";
 }
 
 /**
- * 3. ACCIÓN: EL TESORERO REGISTRA UN PAGO EN EFECTIVO / PRESENCIAL (Aprobado automáticamente)
+ * 3. ACCIÓN: TESORERO REGISTRA UN PAGO MANUAL (Efectivo o Transf. Antigua)
  */
 export async function createPresentialPayment(input: CreatePresentialPaymentInput) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) throw new Error("No autorizado.");
 
-    // Verificar que quien ejecuta la acción sea realmente el ADMIN (Tesorero)
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes para registrar pagos manuales.");
 
     const activeYear = await prisma.schoolYear.findFirst({ where: { isActive: true } });
     if (!activeYear) throw new Error("No hay un año escolar activo configurado.");
 
-    // Buscamos quién es el apoderado de este alumno para asociar el pago a su cuenta
     const student = await prisma.student.findUnique({
       where: { id: input.studentId },
       include: { parents: true }
@@ -142,20 +136,19 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
       throw new Error("El alumno no existe o no tiene un apoderado asociado.");
     }
     
-    // Tomamos al primer papá/mamá asociado para dejar el registro vinculado
     const parentId = student.parents[0].id;
 
-    const { selectedQuotas, selectedExtraFeeIds, studentId } = input;
+    const { selectedQuotas, selectedExtraFeeIds, studentId, paymentDate, paymentMethod } = input;
 
     await prisma.$transaction(async (tx) => {
-      // Registrar Cuotas Regulares
       if (selectedQuotas && selectedQuotas.length > 0) {
         for (const quotaNum of selectedQuotas) {
           await tx.payment.create({
             data: {
               amount: activeYear.quotaAmount,
-              receiptUrl: "EFECTIVO", // Marca especial para auditoría de caja
-              isVerified: true,       // Nace aprobado porque el tesorero recibió el dinero
+              receiptUrl: paymentMethod, 
+              isVerified: true,
+              date: paymentDate, 
               schoolYearId: activeYear.id,
               userId: parentId,
               studentId,
@@ -165,7 +158,6 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
         }
       }
 
-      // Registrar Cobros Extraordinarios
       if (selectedExtraFeeIds && selectedExtraFeeIds.length > 0) {
         for (const extraId of selectedExtraFeeIds) {
           const extraFee = await tx.extraFee.findUnique({ where: { id: extraId } });
@@ -174,8 +166,9 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
           await tx.payment.create({
             data: {
               amount: extraFee.amount,
-              receiptUrl: "EFECTIVO",
+              receiptUrl: paymentMethod,
               isVerified: true,
+              date: paymentDate, 
               schoolYearId: activeYear.id,
               userId: parentId,
               studentId,
@@ -186,17 +179,16 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
       }
     });
 
-    // Refrescamos las rutas para que los balances y los paneles se actualicen al instante
     revalidatePath("/mis-pagos");
     revalidatePath("/admin/ingresos");
   } catch (error) {
-    console.error("Error al registrar pago presencial:", error);
-    throw new Error("No se pudo registrar el pago en efectivo.");
+    console.error("Error al registrar pago presencial/manual:", error);
+    throw new Error("No se pudo registrar el pago manual.");
   }
 }
 
 /**
- * 4. ACCIÓN: RECHAZAR UN PAGO (Lo elimina para que el apoderado vuelva a intentar)
+ * 4. ACCIÓN: RECHAZAR UN PAGO
  */
 export async function rejectPayment(paymentId: string) {
   try {
@@ -206,7 +198,6 @@ export async function rejectPayment(paymentId: string) {
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    // Al borrarlo, la grilla del apoderado volverá automáticamente a "Pendiente" (Rojo)
     await prisma.payment.delete({
       where: { id: paymentId },
     });
@@ -261,7 +252,6 @@ export async function deleteExtraFee(extraFeeId: string) {
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    // Se elimina en cascada gracias a tu diseño en schema.prisma
     await prisma.extraFee.delete({
       where: { id: extraFeeId },
     });
@@ -271,5 +261,29 @@ export async function deleteExtraFee(extraFeeId: string) {
   } catch (error) {
     console.error("Error al eliminar cobro extra:", error);
     throw new Error("No se pudo eliminar el cobro extraordinario. Quizás ya tiene pagos asociados.");
+  }
+}
+
+/**
+ * 7. ACCIÓN: ELIMINAR UN PAGO VERIFICADO (Para corregir errores de caja)
+ */
+export async function deletePayment(paymentId: string) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) throw new Error("No autorizado.");
+
+    const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
+
+    // Se elimina definitivamente de la base de datos
+    await prisma.payment.delete({
+      where: { id: paymentId },
+    });
+
+    revalidatePath("/mis-pagos");
+    revalidatePath("/admin/ingresos");
+  } catch (error) {
+    console.error("Error al eliminar registro de pago:", error);
+    throw new Error("No se pudo eliminar el registro de pago.");
   }
 }

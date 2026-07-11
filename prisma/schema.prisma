@@ -74,6 +74,7 @@ model SchoolYear {
   expenses       Expense[]
   activities     Activity[]
   extraFees      ExtraFee[]
+  polls          Poll[]
 }
 
 // Tabla de Usuarios
@@ -91,7 +92,8 @@ model User {
   sessions      Session[]
   students      Student[]      
   payments      Payment[]
-  comments      Comment[]      // Relación con los comentarios creados por este usuario
+  comments      Comment[]
+  pollVotes     PollVote[]
 }
 
 // Tabla de Alumnos
@@ -99,11 +101,13 @@ model Student {
   id          String   @id @default(cuid())
   firstName   String
   lastName    String
+  orderNumber Int      @default(0)
   isActive    Boolean  @default(true) 
   startQuotaNumber Int       @default(1)
   
   parents     User[]   
   payments    Payment[]
+  pollVotes   PollVote[]
 }
 
 // Cobros Extraordinarios (Ej: Cumpleaños, Paseos)
@@ -180,4 +184,56 @@ model Comment {
   
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// --- NUEVAS TABLAS PARA ENCUESTAS ---
+
+// Tabla principal de la Encuesta/Consulta
+model Poll {
+  id           String       @id @default(cuid())
+  title        String       // Ej: "Elección del menú para el paseo"
+  description  String?      @db.Text
+  createdAt    DateTime     @default(now())
+  expiresAt    DateTime?    // Fecha límite para votar
+  isActive     Boolean      @default(true)
+  
+  schoolYearId String
+  schoolYear   SchoolYear   @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  options      PollOption[] // Relación con las opciones disponibles
+  votes        PollVote[]   // Historial de todos los votos emitidos
+}
+
+// Tabla de las opciones a elegir dentro de una encuesta
+model PollOption {
+  id        String     @id @default(cuid())
+  text      String     // Ej: "Opción 1: Completos", "Opción 2: Empanadas"
+  
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  
+  votes     PollVote[] // Votos específicos que recibió esta opción
+}
+
+// Tabla de los votos emitidos (El peso del voto es por ALUMNO)
+model PollVote {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  
+  pollId       String
+  poll         Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  
+  pollOptionId String
+  pollOption   PollOption @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+  
+  // Apoderado que emitió la acción (para auditoría)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Alumno por el cual se está votando
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // REGLA DE NEGOCIO CLAVE: Un solo voto por Alumno por Encuesta
+  @@unique([pollId, studentId]) 
 }

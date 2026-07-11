@@ -7,7 +7,8 @@ import {
   rejectPayment, 
   createPresentialPayment, 
   createExtraFee, 
-  deleteExtraFee 
+  deleteExtraFee,
+  deletePayment // <-- Importamos la nueva función
 } from "@/app/actions/payment";
 import { 
   Check, 
@@ -25,7 +26,8 @@ import {
   Download,
   TrendingUp,
   CreditCard,
-  Wallet
+  Wallet,
+  Landmark
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -91,12 +93,11 @@ export default function AdminRevenueClient({
   verifiedPayments,
   extraFees
 }: AdminRevenueClientProps) {
-  // CAMBIO 1: La pestaña por defecto ahora es "summary" (Resumen)
   const [activeTab, setActiveTab] = useState<"summary" | "pending" | "cash" | "fees">("summary");
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false); // Estado para la carga de Excel
+  const [isExporting, setIsExporting] = useState(false);
 
   const [alertConfig, setAlertConfig] = useState<{
     isOpen: boolean;
@@ -115,12 +116,13 @@ export default function AdminRevenueClient({
   const [cashStudentId, setCashStudentId] = useState("");
   const [cashQuotas, setCashQuotas] = useState<number[]>([]);
   const [cashExtras, setCashExtras] = useState<string[]>([]);
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentMethod, setPaymentMethod] = useState<"EFECTIVO" | "TRANSFERENCIA MANUAL">("EFECTIVO");
 
   const [newFeeTitle, setNewFeeTitle] = useState("");
   const [newFeeAmount, setNewFeeAmount] = useState("");
   const [newFeeDueDate, setNewFeeDueDate] = useState("");
 
-  // --- NUEVO: CÁLCULOS MATEMÁTICOS DEL RESUMEN EN TIEMPO REAL ---
   let totalPresupuestadoEsperado = 0;
   students.forEach(s => {
     const mesesCorrespondientes = (activeYear.totalQuotas - s.startQuotaNumber) + 1;
@@ -137,7 +139,6 @@ export default function AdminRevenueClient({
   const totalCajaEfectivo = verifiedPayments.filter(p => p.receiptUrl === "EFECTIVO").reduce((sum, p) => sum + p.amount, 0);
   const totalGeneralEnCaja = totalCajaBanco + totalCajaEfectivo;
 
-  // --- NUEVO: GATILLADOR DE DESCARGA DE EXCEL BANCARIO ---
   const handleExportExcel = async () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -197,19 +198,46 @@ export default function AdminRevenueClient({
     });
   };
 
+  // --- NUEVO GATILLADOR DE BORRADO ---
+  const triggerDeletePayment = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: "¿Eliminar Registro de Caja?",
+      message: "Esta acción borrará permanentemente este ingreso del libro de caja. Usa esto solo para corregir errores de digitación. ¿Estás seguro?",
+      onConfirm: async () => {
+        setProcessingId(id);
+        try {
+          await deletePayment(id);
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+          setAlertConfig({ isOpen: true, type: "success", title: "Registro Eliminado", message: "El ingreso ha sido borrado exitosamente del sistema." });
+        } catch {
+          setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo eliminar el registro." });
+        } finally {
+          setProcessingId(null);
+        }
+      }
+    });
+  };
+
   const handleRegisterCash = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cashStudentId || (cashQuotas.length === 0 && cashExtras.length === 0) || isSubmitting) return;
+    if (!cashStudentId || (cashQuotas.length === 0 && cashExtras.length === 0) || !paymentDate || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
+      const parsedDate = new Date(paymentDate);
+      parsedDate.setHours(12, 0, 0, 0);
+
       await createPresentialPayment({
         studentId: cashStudentId,
         selectedQuotas: cashQuotas,
-        selectedExtraFeeIds: cashExtras
+        selectedExtraFeeIds: cashExtras,
+        paymentDate: parsedDate,
+        paymentMethod: paymentMethod
       });
       setCashStudentId(""); setCashQuotas([]); setCashExtras([]);
-      setAlertConfig({ isOpen: true, type: "success", title: "Pago en Efectivo Guardado", message: "Ingreso registrado con éxito." });
+      setPaymentDate(new Date().toISOString().split('T')[0]);
+      setAlertConfig({ isOpen: true, type: "success", title: "Pago Registrado", message: "Ingreso guardado y verificado con éxito." });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error desconocido al guardar.";
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
@@ -279,7 +307,7 @@ export default function AdminRevenueClient({
             activeTab === "cash" ? "border-brand-navy text-brand-navy" : "border-transparent text-gray-400 hover:text-gray-600"
           }`}
         >
-          💵 Caja y Efectivo
+          💵 Caja y Pagos Manuales
         </button>
         <button
           onClick={() => setActiveTab("fees")}
@@ -291,11 +319,10 @@ export default function AdminRevenueClient({
         </button>
       </div>
 
-      {/* --- NUEVA PESTAÑA: RESUMEN EJECUTIVO CON EXCEL --- */}
+      {/* --- PESTAÑA 1: RESUMEN EJECUTIVO CON EXCEL --- */}
       {activeTab === "summary" && (
         <div className="space-y-6 animate-fade-in">
           
-          {/* Botón Maestro de Descarga */}
           <div className="flex justify-end">
             <button
               onClick={handleExportExcel}
@@ -307,7 +334,6 @@ export default function AdminRevenueClient({
             </button>
           </div>
 
-          {/* Tarjetas KPI de Estado Macroeconómico */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center gap-4">
               <div className="p-3 bg-white text-emerald-600 rounded-xl shadow-sm"><TrendingUp size={24} /></div>
@@ -332,7 +358,6 @@ export default function AdminRevenueClient({
             </div>
           </div>
 
-          {/* Tarjeta Detalle de Caja y Auditoría */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm max-w-xl space-y-4">
             <h3 className="text-base font-bold text-brand-navy">Fondos Disponibles por Medio de Pago</h3>
             <div className="divide-y divide-gray-50">
@@ -341,7 +366,7 @@ export default function AdminRevenueClient({
                 <span className="font-bold text-gray-900">${totalCajaBanco.toLocaleString("es-CL")}</span>
               </div>
               <div className="flex justify-between py-3 text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><DollarSign size={16} className="text-amber-500" /> Caja Física (Efectivo Reuniones)</span>
+                <span className="text-gray-500 flex items-center gap-2"><DollarSign size={16} className="text-amber-500" /> Caja Física (Efectivo)</span>
                 <span className="font-bold text-gray-900">${totalCajaEfectivo.toLocaleString("es-CL")}</span>
               </div>
               <div className="flex justify-between pt-4 pb-1 text-base font-black border-t-2 border-gray-100">
@@ -427,7 +452,7 @@ export default function AdminRevenueClient({
         </div>
       )}
 
-      {/* --- PESTAÑA 3: CAJA Y EFECTIVO (REGISTRO MANUAL) --- */}
+      {/* --- PESTAÑA 3: CAJA Y PAGOS MANUALES --- */}
       {activeTab === "cash" && (() => {
         const studentPending = pendingPayments.filter(p => p.studentId === cashStudentId);
         const studentVerified = verifiedPayments.filter(p => p.studentId === cashStudentId);
@@ -447,32 +472,66 @@ export default function AdminRevenueClient({
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-            <form onSubmit={handleRegisterCash} className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 h-fit">
+            <form onSubmit={handleRegisterCash} className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 h-fit sticky top-6">
               <div>
                 <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
                   <UserCheck size={20} className="text-brand-accent" />
-                  Pago en Reunión / Efectivo
+                  Ingreso Manual
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">Ingresa los pagos físicos recibidos de forma presencial.</p>
+                <p className="text-xs text-gray-400 mt-0.5">Regulariza pagos antiguos o recibidos en efectivo sin exigir comprobante al apoderado.</p>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">1. Seleccionar Alumno(a)</label>
-                <select
-                  value={cashStudentId}
-                  onChange={(e) => { setCashStudentId(e.target.value); setCashQuotas([]); setCashExtras([]); }}
-                  required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer"
-                >
-                  <option value="">-- Buscar Alumno --</option>
-                  {students.map(s => <option key={s.id} value={s.id}>🎓 {s.lastName}, {s.firstName}</option>)}
-                </select>
+              <div className="space-y-4 border-t border-gray-50 pt-4">
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Fecha del Pago</label>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Vía de Recepción</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("EFECTIVO")}
+                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer flex justify-center gap-2 items-center ${paymentMethod === "EFECTIVO" ? "bg-amber-50 text-amber-700 border-amber-300 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+                    >
+                      <DollarSign size={14}/> Efectivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("TRANSFERENCIA MANUAL")}
+                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer flex justify-center gap-2 items-center ${paymentMethod === "TRANSFERENCIA MANUAL" ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+                    >
+                      <Landmark size={14}/> Banco
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Alumno(a)</label>
+                  <select
+                    value={cashStudentId}
+                    onChange={(e) => { setCashStudentId(e.target.value); setCashQuotas([]); setCashExtras([]); }}
+                    required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer"
+                  >
+                    <option value="">-- Seleccionar --</option>
+                    {students.map(s => <option key={s.id} value={s.id}>🎓 {s.lastName}, {s.firstName}</option>)}
+                  </select>
+                </div>
               </div>
 
               {cashStudentId && (
                 <>
                   <div className="space-y-2 border-t border-gray-50 pt-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">2. Cuotas Mensuales (${activeYear.quotaAmount})</label>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Cuotas a Regularizar (${activeYear.quotaAmount})</label>
                     <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
                       {Array.from({ length: activeYear.totalQuotas }).map((_, i) => {
                         const qNum = i + 1;
@@ -488,7 +547,7 @@ export default function AdminRevenueClient({
                             onClick={() => setCashQuotas(isChecked ? cashQuotas.filter(q => q !== qNum) : [...cashQuotas, qNum])}
                             className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer disabled:cursor-not-allowed ${
                               isExempt ? "bg-gray-50 border-gray-100 text-gray-400 opacity-60" :
-                              isAlreadyPaid ? "bg-gray-50 border-gray-200 text-gray-500" :
+                              isAlreadyPaid ? "bg-gray-50 border-gray-200 text-emerald-600" :
                               isChecked ? "bg-brand-navy text-white border-brand-navy shadow-sm" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                             }`}
                           >
@@ -503,7 +562,7 @@ export default function AdminRevenueClient({
 
                   {extraFees.length > 0 && (
                     <div className="space-y-2 border-t border-gray-50 pt-3">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">3. Cobros Extraordinarios</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Cobros Extraordinarios</label>
                       <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                         {extraFees.map(f => {
                           const isChecked = cashExtras.includes(f.id);
@@ -538,41 +597,70 @@ export default function AdminRevenueClient({
                   <button
                     type="submit"
                     disabled={isSubmitting || (cashQuotas.length === 0 && cashExtras.length === 0)}
-                    className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/10 hover:bg-emerald-700 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 bg-brand-accent text-brand-navy font-bold rounded-xl text-sm shadow-md hover:opacity-90 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Confirmar Recepción Efectivo"}
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Guardar Pago Manual"}
                   </button>
                 </>
               )}
             </form>
 
             <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 bg-gray-50 border-b border-gray-100 font-bold text-sm text-brand-navy">
-                📜 Libro de Ingresos Verificados ({verifiedPayments.length} registros)
+              <div className="p-4 bg-gray-50 border-b border-gray-100 font-bold text-sm text-brand-navy flex justify-between items-center">
+                <span>📜 Libro de Caja Principal</span>
+                <span className="text-xs font-normal text-gray-500 bg-white px-2.5 py-1 rounded-md border border-gray-200">{verifiedPayments.length} Registros</span>
               </div>
-              <div className="overflow-x-auto flex-1 max-h-[460px]">
+              <div className="overflow-x-auto flex-1 h-full min-h-[400px]">
                 {verifiedPayments.length === 0 ? (
                   <div className="p-12 text-center text-gray-400 italic text-sm">El libro de caja está vacío.</div>
                 ) : (
                   <table className="w-full text-left border-collapse text-xs">
-                    <thead className="bg-gray-50 text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
+                    <thead className="bg-white text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                       <tr>
+                        <th className="p-3 w-[90px]">Fecha</th>
                         <th className="p-3">Alumno</th>
                         <th className="p-3">Concepto</th>
                         <th className="p-3">Monto</th>
                         <th className="p-3">Vía</th>
+                        <th className="p-3 text-center">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 text-gray-600">
                       {verifiedPayments.map(p => (
                         <tr key={p.id} className="hover:bg-gray-50/30">
+                          <td className="p-3 text-[11px] font-medium text-gray-500">
+                            {new Date(p.date).toLocaleDateString("es-CL", { timeZone: 'UTC' })}
+                          </td>
                           <td className="p-3 font-bold text-brand-navy">🎓 {p.student?.firstName} {p.student?.lastName}</td>
                           <td className="p-3 font-medium">{p.quotaNumber ? `Cuota ${MONTHS_MAP[p.quotaNumber]}` : p.extraFee?.title}</td>
                           <td className="p-3 font-black text-gray-900">${p.amount.toLocaleString("es-CL")}</td>
                           <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] border ${p.receiptUrl === "EFECTIVO" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
-                              {p.receiptUrl === "EFECTIVO" ? "💵 EFECTIVO" : "🏦 TRANSF."}
-                            </span>
+                            {p.receiptUrl === "EFECTIVO" && (
+                              <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-amber-50 text-amber-700 border-amber-100">
+                                💵 EFECTIVO
+                              </span>
+                            )}
+                            {p.receiptUrl === "TRANSFERENCIA MANUAL" && (
+                              <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-emerald-50 text-emerald-700 border-emerald-200">
+                                🏦 TRANSF. (MANUAL)
+                              </span>
+                            )}
+                            {p.receiptUrl !== "EFECTIVO" && p.receiptUrl !== "TRANSFERENCIA MANUAL" && (
+                              <a href={p.receiptUrl || "#"} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-blue-50 text-blue-700 border-blue-200 hover:underline inline-flex items-center gap-1">
+                                <FileText size={10} /> COMPROBANTE
+                              </a>
+                            )}
+                          </td>
+                          <td className="p-3 flex justify-center">
+                            {/* --- BOTÓN ELIMINAR REGISTRO VERIFICADO --- */}
+                            <button
+                              onClick={() => triggerDeletePayment(p.id)}
+                              disabled={processingId !== null}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer disabled:opacity-40"
+                              title="Eliminar Registro"
+                            >
+                              {processingId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -644,7 +732,7 @@ export default function AdminRevenueClient({
                       <h4 className="text-sm font-bold text-brand-navy">{fee.title}</h4>
                       {fee.dueDate && (
                         <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                          <Calendar size={12} /> Vence el {new Date(fee.dueDate).toLocaleDateString("es-CL")}
+                          <Calendar size={12} /> Vence el {new Date(fee.dueDate).toLocaleDateString("es-CL", { timeZone: 'UTC' })}
                         </span>
                       )}
                     </div>

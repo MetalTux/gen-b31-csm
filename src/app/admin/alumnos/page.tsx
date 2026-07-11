@@ -15,18 +15,26 @@ export default async function AdminAlumnosPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
 
-  // Validación estricta: Solo ADMIN
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (user?.role !== "ADMIN") redirect("/");
 
-  // Traemos el directorio completo de alumnos, ordenados por Apellido, e incluimos a sus apoderados
   const students = await prisma.student.findMany({
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    orderBy: [
+      { orderNumber: "asc" },
+      { lastName: "asc" },
+      { firstName: "asc" }
+    ],
     include: {
       parents: {
-        select: { id: true, name: true, email: true } // Solo traemos los datos necesarios
+        select: { id: true, name: true, email: true }
       }
     }
+  });
+
+  const availableParents = await prisma.user.findMany({
+    where: { role: "USER" }, 
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" }
   });
 
   return (
@@ -38,7 +46,7 @@ export default async function AdminAlumnosPage() {
         </p>
       </div>
 
-      <AdminStudentClient students={students} />
+      <AdminStudentClient students={students} availableParents={availableParents} />
     </main>
   );
 }

@@ -17,6 +17,7 @@ interface CreateStudentInput {
   firstName: string;
   lastName: string;
   startQuotaNumber: number;
+  orderNumber: number;
 }
 
 interface UpdateStudentInput {
@@ -25,6 +26,7 @@ interface UpdateStudentInput {
   lastName: string;
   startQuotaNumber: number;
   isActive: boolean;
+  orderNumber: number;
 }
 
 /**
@@ -43,6 +45,7 @@ export async function createStudent(input: CreateStudentInput) {
         firstName: input.firstName.trim(),
         lastName: input.lastName.trim(),
         startQuotaNumber: input.startQuotaNumber,
+        orderNumber: input.orderNumber,
       },
     });
 
@@ -72,6 +75,7 @@ export async function updateStudent(input: UpdateStudentInput) {
         lastName: input.lastName.trim(),
         startQuotaNumber: input.startQuotaNumber,
         isActive: input.isActive,
+        orderNumber: input.orderNumber,
       },
     });
 
@@ -94,7 +98,6 @@ export async function linkParentToStudent(studentId: string, parentEmail: string
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    // Buscamos si el usuario ya ingresó a la plataforma alguna vez
     const userToLink = await prisma.user.findUnique({
       where: { email: parentEmail.trim().toLowerCase() },
     });
@@ -103,7 +106,6 @@ export async function linkParentToStudent(studentId: string, parentEmail: string
       throw new Error("El correo no está registrado. El apoderado debe iniciar sesión en la plataforma al menos una vez antes de ser vinculado.");
     }
 
-    // Conectamos el registro del alumno con el usuario
     await prisma.student.update({
       where: { id: studentId },
       data: {
