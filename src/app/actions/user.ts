@@ -3,7 +3,6 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-// Agregamos "Prisma" a la importación para tener acceso a sus clases de error
 import { PrismaClient, Role, BoardPosition, Prisma } from "@prisma/client"; 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -98,7 +97,6 @@ export async function deleteUser(userId: string) {
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    // Evitar que el admin se borre a sí mismo
     if (adminUser.id === userId) {
       throw new Error("No puedes eliminar tu propia cuenta de administrador.");
     }
@@ -109,16 +107,40 @@ export async function deleteUser(userId: string) {
 
     revalidatePath("/admin/usuarios");
   } catch (error: unknown) {
-    // Manejo de errores nativos de Prisma sin usar "any"
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      // P2003 es el código de Prisma para violaciones de llaves foráneas (Foreign Key Constraint)
       if (error.code === 'P2003') {
         throw new Error("No se puede eliminar este usuario porque ya tiene pagos registrados en la contabilidad. Quítale los permisos de administrador en su lugar.");
       }
     }
     
-    // Fallback estándar
     const errorMessage = error instanceof Error ? error.message : "Error al eliminar usuario.";
+    throw new Error(errorMessage);
+  }
+}
+
+/**
+ * 4. HABILITAR / DESHABILITAR ACCESO DE USUARIO
+ */
+export async function toggleUserAccess(userId: string, newStatus: boolean) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) throw new Error("No autorizado.");
+
+    const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
+
+    if (adminUser.id === userId) {
+      throw new Error("Por seguridad, no puedes desactivar tu propia cuenta de administrador.");
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isActive: newStatus },
+    });
+
+    revalidatePath("/admin/usuarios");
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Error al cambiar el acceso del usuario.";
     throw new Error(errorMessage);
   }
 }

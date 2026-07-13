@@ -89,8 +89,9 @@ export async function updateStudent(input: UpdateStudentInput) {
 
 /**
  * 3. ACCIÓN: VINCULAR UN APODERADO A UN ALUMNO
+ * Actualizado para vincular directamente por ID de usuario (parentId)
  */
-export async function linkParentToStudent(studentId: string, parentEmail: string) {
+export async function linkParentToStudent(studentId: string, parentId: string) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) throw new Error("No autorizado.");
@@ -98,19 +99,13 @@ export async function linkParentToStudent(studentId: string, parentEmail: string
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    const userToLink = await prisma.user.findUnique({
-      where: { email: parentEmail.trim().toLowerCase() },
-    });
-
-    if (!userToLink) {
-      throw new Error("El correo no está registrado. El apoderado debe iniciar sesión en la plataforma al menos una vez antes de ser vinculado.");
-    }
-
+    // Prisma conecta al alumno con el usuario usando únicamente el ID.
+    // Es indiferente si el usuario ha iniciado sesión antes o no.
     await prisma.student.update({
       where: { id: studentId },
       data: {
         parents: {
-          connect: { id: userToLink.id },
+          connect: { id: parentId },
         },
       },
     });

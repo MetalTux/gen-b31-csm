@@ -32,7 +32,7 @@ export default async function AdminAlumnosPage() {
   });
 
   const availableParents = await prisma.user.findMany({
-    where: { role: "USER" }, 
+    //where: {  }, 
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" }
   });

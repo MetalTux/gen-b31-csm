@@ -66,7 +66,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   const [startQuota, setStartQuota] = useState("1"); 
   const [orderNumber, setOrderNumber] = useState(""); 
 
-  // Estados Editar (Ya no necesitamos editModalOpen)
+  // Estados Editar
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
@@ -76,7 +76,8 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   // Estados Vincular
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [parentEmail, setParentEmail] = useState("");
+  // --- ACTUALIZACIÓN: Ahora guardamos el ID del padre seleccionado ---
+  const [parentId, setParentId] = useState("");
 
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
   const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
@@ -113,7 +114,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     }
   };
 
-  // --- LÓGICA DE EDICIÓN ACTUALIZADA ---
   const activateEditMode = (student: Student) => {
     setEditingStudent(student);
     setEditFirstName(student.firstName);
@@ -121,7 +121,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     setEditStartQuota(student.startQuotaNumber.toString());
     setEditOrderNumber(student.orderNumber.toString());
     
-    // UX: Scroll suave hacia arriba para móviles
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -143,7 +142,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         isActive: editingStudent.isActive,
         orderNumber: parseInt(editOrderNumber)
       });
-      setEditingStudent(null); // Regresa al formulario de creación al guardar
+      setEditingStudent(null); 
       setAlertConfig({ isOpen: true, type: "success", title: "Datos Actualizados", message: "La información del alumno se guardó correctamente." });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al actualizar.";
@@ -155,12 +154,13 @@ export default function AdminStudentClient({ students, availableParents }: Admin
 
   const handleLinkParent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudent || !parentEmail || isSubmitting) return;
+    // Validamos usando el parentId
+    if (!selectedStudent || !parentId || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      await linkParentToStudent(selectedStudent.id, parentEmail);
-      setParentEmail("");
+      await linkParentToStudent(selectedStudent.id, parentId);
+      setParentId(""); // Limpiamos estado
       setLinkModalOpen(false);
       setAlertConfig({ isOpen: true, type: "success", title: "Apoderado Vinculado", message: "El apoderado ha sido asignado correctamente." });
     } catch (error) {
@@ -215,7 +215,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
           setActiveTab(newStatus ? "ACTIVOS" : "RETIRADOS");
           
-          // Si estaba editando a este alumno, cancelamos la edición por precaución
           if (editingStudent?.id === student.id) cancelEditMode();
           
         } catch (error) {
@@ -237,7 +236,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         {editingStudent ? (
           /* FORMULARIO DE EDICIÓN */
           <form onSubmit={handleEditStudent} className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-5 relative animate-fade-in">
-            {/* Botón X para cancelar edición */}
             <button 
               type="button" 
               onClick={cancelEditMode}
@@ -485,7 +483,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                     <td className="p-4 align-top">
                       <div className="flex items-center justify-center gap-2 mt-1">
                         
-                        {/* LLAMAMOS A activateEditMode en vez de abrir un modal */}
                         <button
                           onClick={() => activateEditMode(student)}
                           className="p-2 text-gray-400 hover:text-brand-navy hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
@@ -522,12 +519,12 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         </div>
       </div>
 
-      {/* --- MODAL FLOTANTE: VINCULAR APODERADO (Sigue siendo un modal porque es un proceso distinto) --- */}
+      {/* --- MODAL FLOTANTE: VINCULAR APODERADO --- */}
       {linkModalOpen && selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
-              onClick={() => { setLinkModalOpen(false); setParentEmail(""); }}
+              onClick={() => { setLinkModalOpen(false); setParentId(""); }}
               className="absolute top-4 right-4 text-gray-400 hover:bg-gray-100 p-1.5 rounded-full transition-colors cursor-pointer"
             >
               <X size={18} />
@@ -554,14 +551,14 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                 ) : (
                   <div className="relative">
                     <select
-                      value={parentEmail}
-                      onChange={e => setParentEmail(e.target.value)}
+                      value={parentId}
+                      onChange={e => setParentId(e.target.value)}
                       required
                       className="w-full pl-3 pr-10 py-2.5 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white appearance-none cursor-pointer"
                     >
                       <option value="" disabled>-- Selecciona un apoderado de la lista --</option>
                       {unlinkedParents.map(parent => (
-                        <option key={parent.id} value={parent.email || ""}>
+                        <option key={parent.id} value={parent.id}>
                           {parent.name ? `${parent.name} (${parent.email})` : parent.email}
                         </option>
                       ))}

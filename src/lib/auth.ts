@@ -41,7 +41,7 @@ export const authOptions: NextAuthOptions = {
       });
 
       // Si el usuario no existe en la base de datos, bloqueamos el acceso
-      if (!existingUser) {
+      if (!existingUser || existingUser.isActive === false) {
         // Retornar false evita que se envíe el correo de inicio de sesión
         return false; 
       }

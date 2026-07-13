@@ -2,19 +2,20 @@
 "use client";
 
 import { useState } from "react";
-import { createUser, updateUser, deleteUser } from "@/app/actions/user";
+import { createUser, updateUser, deleteUser, toggleUserAccess } from "@/app/actions/user";
 import { Role, BoardPosition } from "@prisma/client";
 import { 
   Loader2, 
   Shield, 
   User as UserIcon, 
   Mail, 
-  GraduationCap,
   ShieldAlert,
   UserPlus,
   Edit2,
   Trash2,
-  X
+  X,
+  Ban,
+  UserCheck
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -31,6 +32,7 @@ interface AppUser {
   email: string | null;
   image: string | null;
   role: Role;
+  isActive: boolean; // <-- Nuevo estado añadido
   boardPosition: BoardPosition | null;
   students: SimpleStudent[];
 }
@@ -113,6 +115,32 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
     });
   };
 
+  // --- NUEVA LÓGICA DE SUSPENSIÓN ---
+  const triggerToggleAccess = (user: AppUser) => {
+    const newStatus = !user.isActive;
+    const actionText = newStatus ? "Reactivar Acceso" : "Suspender Cuenta";
+    
+    setConfirmConfig({
+      isOpen: true,
+      title: `¿${actionText} a ${user.name || user.email}?`,
+      message: newStatus 
+        ? "El usuario recuperará inmediatamente su acceso a la plataforma."
+        : "Se le negará el acceso a la plataforma. No podrá ver el muro ni la información del curso hasta que lo reactives.",
+      onConfirm: async () => {
+        setProcessingId(user.id);
+        try {
+          await toggleUserAccess(user.id, newStatus);
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Error al cambiar estado.";
+          setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
+        } finally {
+          setProcessingId(null);
+        }
+      }
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
@@ -129,7 +157,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
             </p>
           </div>
           {editingId && (
-            <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm">
+            <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm cursor-pointer">
               <X size={16} />
             </button>
           )}
@@ -174,7 +202,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
         </button>
       </form>
 
-      {/* --- COLUMNA DERECHA: TABLA DE SOLO LECTURA --- */}
+      {/* --- COLUMNA DERECHA: TABLA DE USUARIOS --- */}
       <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-fit">
         <div className="p-4 bg-gray-50 border-b border-gray-100 font-bold text-sm text-brand-navy flex items-center gap-2">
           <Shield size={18} className="text-brand-accent" />
@@ -182,7 +210,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
         </div>
 
         <div className="overflow-x-auto max-h-[600px]">
-          <table className="w-full text-left border-collapse text-sm">
+          <table className="w-full text-left border-collapse text-sm min-w-[600px]">
             <thead className="bg-gray-50 text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
               <tr>
                 <th className="p-4">Apoderado</th>
@@ -193,21 +221,30 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
             </thead>
             <tbody className="divide-y divide-gray-50 text-gray-600">
               {users.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50/40 transition-colors ${editingId === u.id && "bg-amber-50/30"}`}>
+                <tr key={u.id} className={`hover:bg-gray-50/40 transition-colors ${editingId === u.id ? "bg-amber-50/30" : ""} ${!u.isActive ? "bg-red-50/20" : ""}`}>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       {u.image ? (
-                        <img src={u.image} alt={u.name || "Avatar"} className="w-9 h-9 rounded-full border border-gray-200 object-cover" />
+                        <img src={u.image} alt={u.name || "Avatar"} className={`w-9 h-9 rounded-full border border-gray-200 object-cover ${!u.isActive ? "opacity-50 grayscale" : ""}`} />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-brand-navy/5 text-brand-navy flex items-center justify-center font-bold border border-brand-navy/10 shrink-0">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold border shrink-0 ${!u.isActive ? "bg-red-100 text-red-400 border-red-200" : "bg-brand-navy/5 text-brand-navy border-brand-navy/10"}`}>
                           <UserIcon size={16} />
                         </div>
                       )}
                       <div>
-                        <div className="font-bold text-brand-navy whitespace-nowrap">{u.name || "Sin nombre"}</div>
+                        {/* EFECTO VISUAL: Si está suspendido, se tacha y se pone gris */}
+                        <div className={`font-bold whitespace-nowrap ${!u.isActive ? "text-gray-400 line-through" : "text-brand-navy"}`}>
+                          {u.name || "Sin nombre"}
+                        </div>
                         <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
                           <Mail size={11} className="shrink-0"/> {u.email}
                         </div>
+                        {/* ETIQUETA ROJA DE SUSPENSIÓN */}
+                        {!u.isActive && (
+                          <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md mt-1.5 inline-flex items-center gap-1 w-max">
+                            <Ban size={10} /> SUSPENDIDO
+                          </span>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -215,23 +252,23 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                   <td className="p-4">
                     {u.role === "ADMIN" ? (
                       <div>
-                        <span className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md inline-block mb-1">🛡️ DIRECTIVA</span>
-                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide pl-1">{u.boardPosition}</div>
+                        <span className={`text-xs font-bold border px-2 py-0.5 rounded-md inline-block mb-1 ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-red-700 bg-red-50 border-red-200"}`}>🛡️ DIRECTIVA</span>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide pl-1">{u.boardPosition}</div>
                       </div>
                     ) : (
-                      <span className="text-xs font-bold text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">👤 Apoderado</span>
+                      <span className={`text-xs font-bold border px-2 py-0.5 rounded-md ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-gray-600 bg-gray-100 border-gray-200"}`}>👤 Apoderado</span>
                     )}
                   </td>
 
                   <td className="p-4">
                     {u.students.length === 0 ? (
-                      <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-1 rounded flex items-center gap-1 w-fit">
+                      <span className={`text-[10px] font-bold border px-2 py-1 rounded flex items-center gap-1 w-fit ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-amber-600 bg-amber-50 border-amber-100"}`}>
                         <ShieldAlert size={12} /> Sin asignar
                       </span>
                     ) : (
                       <div className="flex flex-col gap-1">
                         {u.students.map(s => (
-                          <span key={s.id} className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md truncate max-w-[150px]">
+                          <span key={s.id} className={`text-[11px] font-bold border px-2 py-0.5 rounded-md truncate max-w-[150px] ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-emerald-700 bg-emerald-50 border-emerald-100"}`}>
                             🎓 {s.firstName} {s.lastName}
                           </span>
                         ))}
@@ -240,12 +277,23 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                   </td>
 
                   <td className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Editar">
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-                        {processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      
+                      {/* BOTÓN PARA SUSPENDER / ACTIVAR */}
+                      <button 
+                        onClick={() => triggerToggleAccess(u)} 
+                        disabled={processingId !== null} 
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isActive ? "text-amber-500 hover:bg-amber-50" : "text-emerald-500 hover:bg-emerald-50"}`} 
+                        title={u.isActive ? "Suspender Acceso" : "Reactivar Cuenta"}
+                      >
+                        {processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : u.isActive ? <Ban size={16} /> : <UserCheck size={16} />}
+                      </button>
+
+                      <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Eliminar">
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
