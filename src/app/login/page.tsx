@@ -1,8 +1,18 @@
 // src/app/login/page.tsx
-
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import LoginForm from "@/components/LoginForm";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // 1. Validamos si el usuario ya tiene una sesión activa en el servidor
+  const session = await getServerSession(authOptions);
+
+  // 2. Si la sesión existe, lo mandamos al inicio de inmediato
+  if (session?.user) {
+    redirect("/");
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-brand-light px-4">
       {/* Encabezado Institucional discreto fuera de la tarjeta */}
