@@ -22,7 +22,8 @@ import {
   UserMinus,
   UserCheck,
   ChevronDown,
-  Hash
+  Hash,
+  Plus // <-- Importamos Plus para el botón móvil
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -59,6 +60,9 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<"ACTIVOS" | "RETIRADOS">("ACTIVOS");
+  
+  // --- NUEVO ESTADO PARA MÓVILES ---
+  const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
 
   // Estados Crear
   const [firstName, setFirstName] = useState("");
@@ -76,7 +80,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   // Estados Vincular
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  // --- ACTUALIZACIÓN: Ahora guardamos el ID del padre seleccionado ---
   const [parentId, setParentId] = useState("");
 
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
@@ -106,6 +109,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
       setOrderNumber("");
       setAlertConfig({ isOpen: true, type: "success", title: "Alumno Matriculado", message: "El registro ha sido creado exitosamente." });
       setActiveTab("ACTIVOS");
+      setIsMobileFormOpen(false); // Cerramos el formulario en móvil al terminar
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al guardar.";
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
@@ -120,12 +124,13 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     setEditLastName(student.lastName);
     setEditStartQuota(student.startQuotaNumber.toString());
     setEditOrderNumber(student.orderNumber.toString());
-    
+    setIsMobileFormOpen(true); // Forzamos abrir el formulario en móvil
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelEditMode = () => {
     setEditingStudent(null);
+    setIsMobileFormOpen(false); // Cerramos en móvil al cancelar
   };
 
   const handleEditStudent = async (e: React.FormEvent) => {
@@ -143,6 +148,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         orderNumber: parseInt(editOrderNumber)
       });
       setEditingStudent(null); 
+      setIsMobileFormOpen(false);
       setAlertConfig({ isOpen: true, type: "success", title: "Datos Actualizados", message: "La información del alumno se guardó correctamente." });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al actualizar.";
@@ -154,13 +160,12 @@ export default function AdminStudentClient({ students, availableParents }: Admin
 
   const handleLinkParent = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Validamos usando el parentId
     if (!selectedStudent || !parentId || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       await linkParentToStudent(selectedStudent.id, parentId);
-      setParentId(""); // Limpiamos estado
+      setParentId(""); 
       setLinkModalOpen(false);
       setAlertConfig({ isOpen: true, type: "success", title: "Apoderado Vinculado", message: "El apoderado ha sido asignado correctamente." });
     } catch (error) {
@@ -230,152 +235,168 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
       
-      {/* --- COLUMNA IZQUIERDA: FORMULARIOS (CREAR O EDITAR) --- */}
-      <div className="lg:col-span-1 h-fit sticky top-6">
+      {/* --- COLUMNA IZQUIERDA: FORMULARIOS --- */}
+      <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
         
-        {editingStudent ? (
-          /* FORMULARIO DE EDICIÓN */
-          <form onSubmit={handleEditStudent} className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-5 relative animate-fade-in">
-            <button 
-              type="button" 
-              onClick={cancelEditMode}
-              className="absolute top-4 right-4 text-gray-400 hover:bg-white hover:text-gray-700 p-1.5 rounded-full transition-colors cursor-pointer"
-              title="Cancelar edición"
-            >
-              <X size={18} />
-            </button>
+        {/* BOTÓN MÓVIL PARA DESPLEGAR FORMULARIO (Uso de !lg:hidden) */}
+        <button 
+          type="button"
+          onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
+          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
+        >
+          {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
+          {isMobileFormOpen 
+            ? "Ocultar Formulario" 
+            : (editingStudent ? "Continuar Editando Alumno" : "Matricular Nuevo Alumno")}
+        </button>
 
-            <div>
-              <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
-                <Pencil size={18} className="text-blue-500" />
-                Editar Alumno
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Modificando el registro de <span className="font-bold">{editingStudent.lastName}, {editingStudent.firstName}</span>.</p>
-            </div>
+        {/* CONTENEDOR DEL FORMULARIO (Uso de !lg:block) */}
+        <div className={`lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
+          
+          {editingStudent ? (
+            /* FORMULARIO DE EDICIÓN */
+            <form onSubmit={handleEditStudent} className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-5 relative animate-fade-in">
+              <button 
+                type="button" 
+                onClick={cancelEditMode}
+                className="absolute top-4 right-4 text-gray-400 hover:bg-white hover:text-gray-700 p-1.5 rounded-full transition-colors cursor-pointer"
+                title="Cancelar edición"
+              >
+                <X size={18} />
+              </button>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                  <Hash size={13} className="text-blue-500"/>
-                  N° de Lista (Orden)
-                </label>
-                <input
-                  type="number" 
-                  value={editOrderNumber} 
-                  onChange={e => setEditOrderNumber(e.target.value)}
-                  required min="1"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-bold bg-white"
-                />
+              <div>
+                <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
+                  <Pencil size={18} className="text-blue-500" />
+                  Editar Alumno
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Modificando el registro de <span className="font-bold">{editingStudent.lastName}, {editingStudent.firstName}</span>.</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
-                <input
-                  type="text" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                    <Hash size={13} className="text-blue-500"/>
+                    N° de Lista (Orden)
+                  </label>
+                  <input
+                    type="number" 
+                    value={editOrderNumber} 
+                    onChange={e => setEditOrderNumber(e.target.value)}
+                    required min="1"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-bold bg-white"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
-                <input
-                  type="text" value={editLastName} onChange={e => setEditLastName(e.target.value)} required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white"
-                />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
+                  <input
+                    type="text" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
-                <div className="relative">
-                  <select
-                    value={editStartQuota} onChange={e => setEditStartQuota(e.target.value)} required
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white appearance-none cursor-pointer"
-                  >
-                    {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                      <option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
+                  <input
+                    type="text" value={editLastName} onChange={e => setEditLastName(e.target.value)} required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
+                  <div className="relative">
+                    <select
+                      value={editStartQuota} onChange={e => setEditStartQuota(e.target.value)} required
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white appearance-none cursor-pointer"
+                    >
+                      {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                        <option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit" disabled={isSubmitting}
-              className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 transition-all cursor-pointer disabled:bg-blue-300 flex justify-center items-center gap-2"
-            >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Guardar Cambios"}
-            </button>
-          </form>
-        ) : (
-          /* FORMULARIO DE CREACIÓN */
-          <form onSubmit={handleCreateStudent} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
-            <div>
-              <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
-                <UserPlus size={20} className="text-brand-accent" />
-                Matricular Alumno
-              </h3>
-              <p className="text-xs text-gray-400 mt-0.5">Ingresa los datos para registrar un niño en el curso.</p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                  <Hash size={13} className="text-brand-accent"/>
-                  N° de Lista (Orden)
-                </label>
-                <input
-                  type="number" 
-                  value={orderNumber} 
-                  onChange={e => setOrderNumber(e.target.value)}
-                  placeholder="Ej: 1" required min="1"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold"
-                />
+              <button
+                type="submit" disabled={isSubmitting}
+                className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 transition-all cursor-pointer disabled:bg-blue-300 flex justify-center items-center gap-2"
+              >
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Guardar Cambios"}
+              </button>
+            </form>
+          ) : (
+            /* FORMULARIO DE CREACIÓN */
+            <form onSubmit={handleCreateStudent} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
+              <div>
+                <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
+                  <UserPlus size={20} className="text-brand-accent" />
+                  Matricular Alumno
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Ingresa los datos para registrar un niño en el curso.</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
-                <input
-                  type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
-                  placeholder="Ej: Juan Pablo" required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                    <Hash size={13} className="text-brand-accent"/>
+                    N° de Lista (Orden)
+                  </label>
+                  <input
+                    type="number" 
+                    value={orderNumber} 
+                    onChange={e => setOrderNumber(e.target.value)}
+                    placeholder="Ej: 1" required min="1"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
-                <input
-                  type="text" value={lastName} onChange={e => setLastName(e.target.value)}
-                  placeholder="Ej: Pérez González" required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
-                />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
+                  <input
+                    type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
+                    placeholder="Ej: Juan Pablo" required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
-                <div className="relative">
-                  <select
-                    value={startQuota} onChange={e => setStartQuota(e.target.value)} required
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white appearance-none cursor-pointer"
-                  >
-                    {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                      <option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
+                  <input
+                    type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                    placeholder="Ej: Pérez González" required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
+                  <div className="relative">
+                    <select
+                      value={startQuota} onChange={e => setStartQuota(e.target.value)} required
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white appearance-none cursor-pointer"
+                    >
+                      {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                        <option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit" disabled={isSubmitting}
-              className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 flex justify-center items-center gap-2"
-            >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-              {isSubmitting ? "Guardando..." : "Crear Registro"}
-            </button>
-          </form>
-        )}
+              <button
+                type="submit" disabled={isSubmitting}
+                className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 flex justify-center items-center gap-2"
+              >
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                {isSubmitting ? "Guardando..." : "Crear Registro"}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {/* --- COLUMNA DERECHA: DIRECTORIO --- */}

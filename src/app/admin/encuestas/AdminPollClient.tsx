@@ -48,6 +48,9 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
   
   const [expandedPollId, setExpandedPollId] = useState<string | null>(null);
 
+  // Estado para el acordeón móvil
+  const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+
   // Estados Formulario Crear
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +92,7 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
       await createPoll({ title, description, expiresAt: dateParsed, options: validOptions });
       setTitle(""); setDescription(""); setExpiresAt(""); setOptions([{ id: 1, text: "" }, { id: 2, text: "" }]);
       setAlertConfig({ isOpen: true, type: "success", title: "Encuesta Creada", message: "La consulta ya está disponible para los apoderados." });
+      setIsMobileFormOpen(false); // Cerramos en móvil al terminar
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al guardar.";
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
@@ -103,7 +107,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     setEditDescription(poll.description || "");
     
     if (poll.expiresAt) {
-      // Convertir fecha de DB a formato válido para el input datetime-local
       const date = new Date(poll.expiresAt);
       date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
       setEditExpiresAt(date.toISOString().slice(0, 16));
@@ -170,7 +173,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     });
   };
 
-  // --- NUEVA FUNCIÓN: Gatilla el borrado de un voto individual ---
   const triggerAnnulVote = (voteId: string, studentName: string) => {
     setConfirmConfig({
       isOpen: true,
@@ -194,69 +196,81 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
       
       {/* --- COLUMNA IZQUIERDA: CREAR ENCUESTA --- */}
-      <form onSubmit={handleCreatePoll} className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 h-fit sticky top-6">
-        <div>
-          <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
-            <HelpCircle size={20} className="text-brand-accent" /> Nueva Consulta
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5">Diseña una encuesta vinculante para el curso.</p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Pregunta o Título</label>
-            <input
-              type="text" value={title} onChange={e => setTitle(e.target.value)} required
-              className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Descripción (Opcional)</label>
-            <textarea
-              value={description} onChange={e => setDescription(e.target.value)} rows={2}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 resize-none"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-              <Clock size={13} className="text-brand-accent"/> Vencimiento (Opcional)
-            </label>
-            <input
-              type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer"
-            />
-          </div>
-
-          <div className="space-y-2 border-t border-gray-50 pt-4">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block">Alternativas de Voto</label>
-            {options.map((opt, index) => (
-              <div key={opt.id} className="flex gap-2">
-                <input
-                  type="text" value={opt.text} onChange={e => updateOption(opt.id, e.target.value)} required
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
-                />
-                {options.length > 2 && (
-                  <button type="button" onClick={() => removeOption(opt.id)} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-xl transition-colors cursor-pointer">
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button type="button" onClick={addOption} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-2 p-1 cursor-pointer">
-              <Plus size={14} /> Añadir otra opción
-            </button>
-          </div>
-        </div>
-
-        <button
-          type="submit" disabled={isSubmitting}
-          className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-100 flex justify-center items-center gap-2 mt-4"
+      <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
+        
+        <button 
+          type="button"
+          onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
+          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
         >
-          {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Publicar Encuesta"}
+          {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
+          {isMobileFormOpen ? "Ocultar Formulario" : "Publicar Nueva Encuesta"}
         </button>
-      </form>
+
+        <form onSubmit={handleCreatePoll} className={`bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 transition-all lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
+          <div>
+            <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
+              <HelpCircle size={20} className="text-brand-accent" /> Nueva Consulta
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">Diseña una encuesta vinculante para el curso.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Pregunta o Título</label>
+              <input
+                type="text" value={title} onChange={e => setTitle(e.target.value)} required
+                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Descripción (Opcional)</label>
+              <textarea
+                value={description} onChange={e => setDescription(e.target.value)} rows={2}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Clock size={13} className="text-brand-accent"/> Vencimiento (Opcional)
+              </label>
+              <input
+                type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-2 border-t border-gray-50 pt-4">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block">Alternativas de Voto</label>
+              {options.map((opt, index) => (
+                <div key={opt.id} className="flex gap-2">
+                  <input
+                    type="text" value={opt.text} onChange={e => updateOption(opt.id, e.target.value)} required
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700"
+                  />
+                  {options.length > 2 && (
+                    <button type="button" onClick={() => removeOption(opt.id)} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-xl transition-colors cursor-pointer">
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" onClick={addOption} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-2 p-1 cursor-pointer">
+                <Plus size={14} /> Añadir otra opción
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit" disabled={isSubmitting}
+            className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-100 flex justify-center items-center gap-2 mt-4"
+          >
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Publicar Encuesta"}
+          </button>
+        </form>
+      </div>
 
       {/* --- COLUMNA DERECHA: HISTORIAL DE ENCUESTAS --- */}
       <div className="lg:col-span-2 space-y-6">
@@ -287,7 +301,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                     
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-black text-brand-navy">{poll.title}</h3>
-                      {/* --- NUEVO BOTÓN: EDITAR TEXTOS DE LA ENCUESTA --- */}
                       <button onClick={() => openEditModal(poll)} className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors cursor-pointer" title="Corregir textos">
                         <Pencil size={14} />
                       </button>
@@ -357,7 +370,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                               <div className="flex items-center gap-3">
                                 <span className="font-semibold text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">{v.pollOption.text}</span>
                                 
-                                {/* --- NUEVO BOTÓN: ANULAR VOTO --- */}
                                 <button
                                   onClick={() => triggerAnnulVote(v.id, `${v.student.firstName} ${v.student.lastName}`)}
                                   disabled={processingId !== null}
@@ -435,7 +447,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
         </div>
       )}
 
-      {/* --- MODALES COMPARTIDOS --- */}
       <AlertModal isOpen={alertConfig.isOpen} type={alertConfig.type} title={alertConfig.title} message={alertConfig.message} onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))} />
       <ConfirmModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} isPending={processingId !== null} />
     </div>

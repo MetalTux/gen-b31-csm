@@ -1,6 +1,6 @@
 /* src/app/globals.css */
 
-@import "tailwindcss";
+@import "tailwindcss" important;
 
 :root {
   --background: #ffffff;

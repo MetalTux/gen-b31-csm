@@ -132,11 +132,13 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
       include: { parents: true }
     });
     
-    if (!student || student.parents.length === 0) {
-      throw new Error("El alumno no existe o no tiene un apoderado asociado.");
+    if (!student) {
+      throw new Error("El alumno no existe en el sistema.");
     }
     
-    const parentId = student.parents[0].id;
+    // --- LA SOLUCIÓN MÁGICA ---
+    // Si hay un apoderado, usamos su ID. Si la lista está vacía, usamos el ID del Tesorero (adminUser.id)
+    const assignToUserId = student.parents.length > 0 ? student.parents[0].id : adminUser.id;
 
     const { selectedQuotas, selectedExtraFeeIds, studentId, paymentDate, paymentMethod } = input;
 
@@ -150,7 +152,7 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
               isVerified: true,
               date: paymentDate, 
               schoolYearId: activeYear.id,
-              userId: parentId,
+              userId: assignToUserId, // Asignación dinámica (Apoderado o Tesorero)
               studentId,
               quotaNumber: quotaNum,
             },
@@ -170,7 +172,7 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
               isVerified: true,
               date: paymentDate, 
               schoolYearId: activeYear.id,
-              userId: parentId,
+              userId: assignToUserId, // Asignación dinámica (Apoderado o Tesorero)
               studentId,
               extraFeeId: extraId,
             },
@@ -183,7 +185,7 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
     revalidatePath("/admin/ingresos");
   } catch (error) {
     console.error("Error al registrar pago presencial/manual:", error);
-    throw new Error("No se pudo registrar el pago manual.");
+    throw new Error(error instanceof Error ? error.message : "No se pudo registrar el pago manual.");
   }
 }
 

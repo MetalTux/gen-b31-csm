@@ -46,18 +46,23 @@ export default async function MisPagosPage() {
     );
   }
 
-  // 3. Traer todos los pagos rendidos por este usuario en el año activo
-  const myPayments = await prisma.payment.findMany({
-    where: {
-      userId: dbUser.id,
-      schoolYearId: activeYear.id,
-    },
-    include: {
-      student: true,
-      extraFee: true,
-    },
-    orderBy: { date: "desc" },
-  });
+  // 3. Extraemos los IDs de los hijos de este apoderado
+  const studentIds = dbUser.students.map(student => student.id);
+
+  // 4. Traemos TODOS los pagos asociados a estos alumnos (sin importar si los pagó la mamá, el papá o el tesorero en efectivo)
+  const myPayments = studentIds.length > 0 
+    ? await prisma.payment.findMany({
+        where: {
+          studentId: { in: studentIds }, // Filtro maestro corregido
+          schoolYearId: activeYear.id,
+        },
+        include: {
+          student: true,
+          extraFee: true,
+        },
+        orderBy: { date: "desc" },
+      })
+    : [];
 
   return (
     <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">

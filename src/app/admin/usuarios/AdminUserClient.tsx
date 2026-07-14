@@ -15,7 +15,8 @@ import {
   Trash2,
   X,
   Ban,
-  UserCheck
+  UserCheck,
+  Plus
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -32,7 +33,7 @@ interface AppUser {
   email: string | null;
   image: string | null;
   role: Role;
-  isActive: boolean; // <-- Nuevo estado añadido
+  isActive: boolean;
   boardPosition: BoardPosition | null;
   students: SimpleStudent[];
 }
@@ -44,6 +45,9 @@ interface AdminUserClientProps {
 export default function AdminUserClient({ users }: AdminUserClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  
+  // Estado para el acordeón móvil
+  const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
 
   // Estados Formulario
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -61,6 +65,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
     setEmail("");
     setRole("USER");
     setBoardPosition("TESORERO");
+    setIsMobileFormOpen(false); // Cerramos en móvil al limpiar
   };
 
   const startEditing = (user: AppUser) => {
@@ -69,6 +74,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
     setEmail(user.email || "");
     setRole(user.role);
     setBoardPosition(user.boardPosition || "TESORERO");
+    setIsMobileFormOpen(true); // Forzamos abrir en móvil al editar
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -115,7 +121,6 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
     });
   };
 
-  // --- NUEVA LÓGICA DE SUSPENSIÓN ---
   const triggerToggleAccess = (user: AppUser) => {
     const newStatus = !user.isActive;
     const actionText = newStatus ? "Reactivar Acceso" : "Suspender Cuenta";
@@ -145,62 +150,74 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
       {/* --- COLUMNA IZQUIERDA: FORMULARIO --- */}
-      <form onSubmit={handleSubmit} className={`lg:col-span-1 p-6 rounded-2xl border shadow-sm space-y-4 h-fit sticky top-6 transition-all ${editingId ? "bg-amber-50/50 border-amber-200" : "bg-white border-gray-100"}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className={`text-lg font-bold flex items-center gap-2 ${editingId ? "text-amber-700" : "text-brand-navy"}`}>
-              {editingId ? <Edit2 size={20} className="text-amber-500" /> : <UserPlus size={20} className="text-brand-accent" />}
-              {editingId ? "Editar Usuario" : "Crear Pre-Registro"}
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {editingId ? "Actualiza datos y privilegios." : "Registra un apoderado manualmente."}
-            </p>
-          </div>
-          {editingId && (
-            <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm cursor-pointer">
-              <X size={16} />
-            </button>
-          )}
-        </div>
+      <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
+        
+        <button 
+          type="button"
+          onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
+          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
+        >
+          {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
+          {isMobileFormOpen ? "Ocultar Formulario" : (editingId ? "Continuar Editando Usuario" : "Crear Pre-Registro")}
+        </button>
 
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombre Completo</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Ej: Camila Rojas" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Correo Electrónico</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Privilegios</label>
-              <select value={role} onChange={e => setRole(e.target.value as Role)} className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer">
-                <option value="USER">Apoderado</option>
-                <option value="ADMIN">Directiva</option>
-              </select>
+        <form onSubmit={handleSubmit} className={`p-6 rounded-2xl border shadow-sm space-y-4 transition-all lg:block! ${isMobileFormOpen ? 'block' : 'hidden'} ${editingId ? "bg-amber-50/50 border-amber-200" : "bg-white border-gray-100"}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={`text-lg font-bold flex items-center gap-2 ${editingId ? "text-amber-700" : "text-brand-navy"}`}>
+                {editingId ? <Edit2 size={20} className="text-amber-500" /> : <UserPlus size={20} className="text-brand-accent" />}
+                {editingId ? "Editar Usuario" : "Crear Pre-Registro"}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {editingId ? "Actualiza datos y privilegios." : "Registra un apoderado manualmente."}
+              </p>
             </div>
-
-            {role === "ADMIN" && (
-              <div className="space-y-1 animate-fade-in">
-                <label className="text-xs font-bold text-brand-navy uppercase tracking-wide">Cargo</label>
-                <select value={boardPosition} onChange={e => setBoardPosition(e.target.value as BoardPosition)} className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-brand-accent/50 bg-brand-navy/5 focus:outline-none focus:ring-2 focus:ring-brand-accent text-brand-navy cursor-pointer">
-                  <option value="TESORERO">Tesorero</option>
-                  <option value="PRESIDENTE">Presidente</option>
-                  <option value="SECRETARIO">Secretario</option>
-                </select>
-              </div>
+            {editingId && (
+              <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm cursor-pointer">
+                <X size={16} />
+              </button>
             )}
           </div>
-        </div>
 
-        <button type="submit" disabled={isSubmitting} className={`w-full py-2.5 font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex justify-center items-center gap-2 pt-3 disabled:bg-gray-100 disabled:text-gray-400 ${editingId ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-brand-navy text-white hover:bg-opacity-95"}`}>
-          {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : (editingId ? <Edit2 size={16} /> : <UserPlus size={16} />)}
-          {isSubmitting ? "Guardando..." : (editingId ? "Guardar Cambios" : "Crear Usuario")}
-        </button>
-      </form>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombre Completo</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Ej: Camila Rojas" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Correo Electrónico</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Privilegios</label>
+                <select value={role} onChange={e => setRole(e.target.value as Role)} className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white cursor-pointer">
+                  <option value="USER">Apoderado</option>
+                  <option value="ADMIN">Directiva</option>
+                </select>
+              </div>
+
+              {role === "ADMIN" && (
+                <div className="space-y-1 animate-fade-in">
+                  <label className="text-xs font-bold text-brand-navy uppercase tracking-wide">Cargo</label>
+                  <select value={boardPosition} onChange={e => setBoardPosition(e.target.value as BoardPosition)} className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-brand-accent/50 bg-brand-navy/5 focus:outline-none focus:ring-2 focus:ring-brand-accent text-brand-navy cursor-pointer">
+                    <option value="TESORERO">Tesorero</option>
+                    <option value="PRESIDENTE">Presidente</option>
+                    <option value="SECRETARIO">Secretario</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button type="submit" disabled={isSubmitting} className={`w-full py-2.5 font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex justify-center items-center gap-2 pt-3 disabled:bg-gray-100 disabled:text-gray-400 ${editingId ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-brand-navy text-white hover:bg-opacity-95"}`}>
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : (editingId ? <Edit2 size={16} /> : <UserPlus size={16} />)}
+            {isSubmitting ? "Guardando..." : (editingId ? "Guardar Cambios" : "Crear Usuario")}
+          </button>
+        </form>
+      </div>
 
       {/* --- COLUMNA DERECHA: TABLA DE USUARIOS --- */}
       <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-fit">
@@ -232,14 +249,12 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                         </div>
                       )}
                       <div>
-                        {/* EFECTO VISUAL: Si está suspendido, se tacha y se pone gris */}
                         <div className={`font-bold whitespace-nowrap ${!u.isActive ? "text-gray-400 line-through" : "text-brand-navy"}`}>
                           {u.name || "Sin nombre"}
                         </div>
                         <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
                           <Mail size={11} className="shrink-0"/> {u.email}
                         </div>
-                        {/* ETIQUETA ROJA DE SUSPENSIÓN */}
                         {!u.isActive && (
                           <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md mt-1.5 inline-flex items-center gap-1 w-max">
                             <Ban size={10} /> SUSPENDIDO
@@ -282,7 +297,6 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                         <Edit2 size={16} />
                       </button>
                       
-                      {/* BOTÓN PARA SUSPENDER / ACTIVAR */}
                       <button 
                         onClick={() => triggerToggleAccess(u)} 
                         disabled={processingId !== null} 
