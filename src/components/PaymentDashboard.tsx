@@ -43,7 +43,6 @@ interface Payment {
   extraFee?: ExtraFee | null;
 }
 
-// NUEVO: Interface para recibir los egresos
 interface Expense {
   id: string;
   amount: number;
@@ -57,7 +56,7 @@ interface SchoolYear {
   year: number;
   quotaAmount: number;
   totalQuotas: number;
-  initialBalance: number; // Usaremos esto para la matemática del saldo inicial
+  initialBalance: number;
   extraFees: ExtraFee[];
 }
 
@@ -65,7 +64,7 @@ interface PaymentDashboardProps {
   activeYear: SchoolYear;
   students: Student[];
   payments: Payment[];
-  expenses: Expense[]; // <-- NUEVO PROP
+  expenses: Expense[];
   currentUserId: string;
 }
 
@@ -92,7 +91,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
   const totalPendingQuotasAmount = Math.max(0, totalExpectedQuotasAmount - totalVerifiedQuotasAmount);
 
 
-  // --- NUEVO: MATEMÁTICA MAESTRA DE TRANSPARENCIA GLOBAL DEL CURSO ---
+  // --- MATEMÁTICA MAESTRA DE TRANSPARENCIA GLOBAL DEL CURSO ---
   // Sumamos absolutamente todos los pagos verificados de TODOS los alumnos del curso
   const totalIngresosCurso = payments
     .filter(p => p.isVerified)
@@ -101,7 +100,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
   // Sumamos todos los gastos del curso
   const totalEgresosCurso = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  // Caja final disponible en el curso: (Ingresos + Saldo Año Anterior) - Gastos
+  // Caja final disponible en el curso: (Ingresos + Saldo Año Anterior/Fondo Inicial) - Gastos
   const saldoFinalDisponible = (totalIngresosCurso + activeYear.initialBalance) - totalEgresosCurso;
 
 
@@ -127,15 +126,10 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
           <h2 className="text-xl font-black mt-0.5">Estado de Caja General del Curso</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl"><TrendingUp size={20} /></div>
-            <div>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide block">Total Ingresos</span>
-              <span className="text-lg font-black text-emerald-400">${totalIngresosCurso.toLocaleString("es-CL")}</span>
-            </div>
-          </div>
-
+        {/* Ajustado grid-cols a sm:grid-cols-3 para acomodar perfectamente las 3 tarjetas restantes */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          
+          {/* 1 - TOTAL EGRESOS */}
           <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
             <div className="p-2.5 bg-red-500/20 text-red-400 rounded-xl"><TrendingDown size={20} /></div>
             <div>
@@ -144,6 +138,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
             </div>
           </div>
 
+          {/* 2 - FONDO INICIAL */}
           <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
             <div className="p-2.5 bg-blue-500/20 text-blue-400 rounded-xl"><Wallet size={20} /></div>
             <div>
@@ -152,6 +147,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
             </div>
           </div>
 
+          {/* 3 - SALDO REAL NETO (Ingresos + Fondo Inicial - Egresos) */}
           <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-inner ${
             saldoFinalDisponible >= 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20"
           }`}>
@@ -312,7 +308,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
             </div>
           )}
 
-          {/* --- NUEVO: LIBRO PÚBLICO DE COMPRAS Y GASTOS DEL CURSO --- */}
+          {/* Libro Público de Compras y Gastos */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 bg-gray-50 border-b border-gray-100 font-bold text-sm text-brand-navy flex items-center gap-2">
               <FileText size={18} className="text-red-500" />
@@ -369,7 +365,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
 
         </div>
 
-        {/* SECCIÓN DERECHA: FORMULARIO DE RENDICIÓN (Ocupa 1 columna) */}
+        {/* SECCIÓN DERECHA: FORMULARIO DE RENDICIÓN */}
         <div className="lg:col-span-1">
           <RenderPaymentForm 
             key={selectedStudentId}
