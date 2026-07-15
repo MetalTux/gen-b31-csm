@@ -64,6 +64,7 @@ interface PaymentDashboardProps {
   activeYear: SchoolYear;
   students: Student[];
   payments: Payment[];
+  allCoursePayments: { amount: number; isVerified: boolean }[]; // <-- Nueva propiedad agregada
   expenses: Expense[];
   currentUserId: string;
 }
@@ -73,10 +74,17 @@ const MONTHS_MAP: { [key: number]: string } = {
   6: "Agosto", 7: "Septiembre", 8: "Octubre", 9: "Noviembre", 10: "Diciembre"
 };
 
-export default function PaymentDashboard({ activeYear, students, payments, expenses, currentUserId }: PaymentDashboardProps) {
+export default function PaymentDashboard({ 
+  activeYear, 
+  students, 
+  payments, 
+  allCoursePayments, // <-- Recibimos la nueva propiedad global
+  expenses, 
+  currentUserId 
+}: PaymentDashboardProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || "");
 
-  // 1. Filtrados individuales para las tarjetas del hijo seleccionado
+  // 1. Filtrados individuales para las tarjetas del hijo seleccionado (Usan 'payments' del usuario)
   const studentPayments = payments.filter(p => p.studentId === selectedStudentId);
   const currentStudent = students.find(s => s.id === selectedStudentId);
   const startQuota = currentStudent?.startQuotaNumber || 1;
@@ -91,16 +99,17 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
   const totalPendingQuotasAmount = Math.max(0, totalExpectedQuotasAmount - totalVerifiedQuotasAmount);
 
 
-  // --- MATEMÁTICA MAESTRA DE TRANSPARENCIA GLOBAL DEL CURSO ---
+  // --- MATEMÁTICA MAESTRA CORREGIDA DE TRANSPARENCIA GLOBAL DEL CURSO ---
   // Sumamos absolutamente todos los pagos verificados de TODOS los alumnos del curso
-  const totalIngresosCurso = payments
+  // usando la nueva propiedad global que viene del servidor
+  const totalIngresosCurso = allCoursePayments
     .filter(p => p.isVerified)
     .reduce((sum, p) => sum + p.amount, 0);
 
   // Sumamos todos los gastos del curso
   const totalEgresosCurso = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  // Caja final disponible en el curso: (Ingresos + Saldo Año Anterior/Fondo Inicial) - Gastos
+  // Caja final disponible en el curso: (Ingresos Totales + Fondo Inicial) - Gastos Totales
   const saldoFinalDisponible = (totalIngresosCurso + activeYear.initialBalance) - totalEgresosCurso;
 
 
@@ -126,7 +135,7 @@ export default function PaymentDashboard({ activeYear, students, payments, expen
           <h2 className="text-xl font-black mt-0.5">Estado de Caja General del Curso</h2>
         </div>
 
-        {/* Ajustado grid-cols a sm:grid-cols-3 para acomodar perfectamente las 3 tarjetas restantes */}
+        {/* Ajustado grid-cols a sm:grid-cols-3 para acomodar perfectamente las 3 tarjetas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           
           {/* 1 - TOTAL EGRESOS */}

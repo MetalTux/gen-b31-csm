@@ -25,7 +25,7 @@ export default async function MisPagosPage() {
 
   if (!dbUser) redirect("/login");
 
-  // 2. Obtener el año escolar activo
+  // 2. Obtener el año escolar activo con sus cobros y gastos
   const activeYear = await prisma.schoolYear.findFirst({
     where: { isActive: true },
     include: {
@@ -46,14 +46,13 @@ export default async function MisPagosPage() {
     );
   }
 
-  // 3. Extraemos los IDs de los hijos de este apoderado
   const studentIds = dbUser.students.map(student => student.id);
 
-  // 4. Traemos TODOS los pagos asociados a estos alumnos (sin importar si los pagó la mamá, el papá o el tesorero en efectivo)
+  // 3. PAGOS DEL USUARIO (Para las cuotas mensuales e historial del apoderado)
   const myPayments = studentIds.length > 0 
     ? await prisma.payment.findMany({
         where: {
-          studentId: { in: studentIds }, // Filtro maestro corregido
+          studentId: { in: studentIds },
           schoolYearId: activeYear.id,
         },
         include: {
@@ -63,6 +62,20 @@ export default async function MisPagosPage() {
         orderBy: { date: "desc" },
       })
     : [];
+
+  // 4. --- LA SOLUCIÓN AQUÍ ---
+  // Consultamos TODOS los pagos verificados del curso de forma global para la caja de transparencia
+  const allVerifiedPayments = await prisma.payment.findMany({
+    where: {
+      schoolYearId: activeYear.id,
+      isVerified: true, // Solo lo que ya entró a caja y fue aprobado
+    },
+    select: {
+      amount: true,
+      // Solo traemos el monto y el estado de verificación para que la consulta sea ultra rápida
+      isVerified: true, 
+    }
+  });
 
   return (
     <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
@@ -76,7 +89,8 @@ export default async function MisPagosPage() {
       <PaymentDashboard 
         activeYear={activeYear}
         students={dbUser.students}
-        payments={myPayments}
+        payments={myPayments} // Para las cuotas individuales del alumno
+        allCoursePayments={allVerifiedPayments} // <-- PASAMOS LOS INGRESOS GLOBALES
         expenses={activeYear.expenses}
         currentUserId={dbUser.id}
       />
