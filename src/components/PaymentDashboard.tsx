@@ -13,7 +13,8 @@ import {
   Wallet, 
   FileText,
   Calendar,
-  Eye
+  Eye,
+  X // <-- Importamos la X para cerrar el modal
 } from "lucide-react";
 import RenderPaymentForm from "./RenderPaymentForm";
 
@@ -64,7 +65,7 @@ interface PaymentDashboardProps {
   activeYear: SchoolYear;
   students: Student[];
   payments: Payment[];
-  allCoursePayments: { amount: number; isVerified: boolean }[]; // <-- Nueva propiedad agregada
+  allCoursePayments: { amount: number; isVerified: boolean }[];
   expenses: Expense[];
   currentUserId: string;
 }
@@ -78,13 +79,16 @@ export default function PaymentDashboard({
   activeYear, 
   students, 
   payments, 
-  allCoursePayments, // <-- Recibimos la nueva propiedad global
+  allCoursePayments,
   expenses, 
   currentUserId 
 }: PaymentDashboardProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || "");
+  
+  // --- NUEVO ESTADO PARA EL MODAL DEL COMPROBANTE ---
+  const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null);
 
-  // 1. Filtrados individuales para las tarjetas del hijo seleccionado (Usan 'payments' del usuario)
+  // 1. Filtrados individuales para las tarjetas del hijo seleccionado
   const studentPayments = payments.filter(p => p.studentId === selectedStudentId);
   const currentStudent = students.find(s => s.id === selectedStudentId);
   const startQuota = currentStudent?.startQuotaNumber || 1;
@@ -99,19 +103,13 @@ export default function PaymentDashboard({
   const totalPendingQuotasAmount = Math.max(0, totalExpectedQuotasAmount - totalVerifiedQuotasAmount);
 
 
-  // --- MATEMÁTICA MAESTRA CORREGIDA DE TRANSPARENCIA GLOBAL DEL CURSO ---
-  // Sumamos absolutamente todos los pagos verificados de TODOS los alumnos del curso
-  // usando la nueva propiedad global que viene del servidor
+  // --- MATEMÁTICA MAESTRA DE TRANSPARENCIA GLOBAL DEL CURSO ---
   const totalIngresosCurso = allCoursePayments
     .filter(p => p.isVerified)
     .reduce((sum, p) => sum + p.amount, 0);
 
-  // Sumamos todos los gastos del curso
   const totalEgresosCurso = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-  // Caja final disponible en el curso: (Ingresos Totales + Fondo Inicial) - Gastos Totales
   const saldoFinalDisponible = (totalIngresosCurso + activeYear.initialBalance) - totalEgresosCurso;
-
 
   if (students.length === 0) {
     return (
@@ -126,7 +124,7 @@ export default function PaymentDashboard({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
       
       {/* --- PANEL DE CONTROL MACRO: RESUMEN DE TRANSPARENCIA GLOBAL --- */}
       <div className="bg-gradient-to-br from-brand-navy to-slate-900 text-white p-6 rounded-3xl shadow-md space-y-6">
@@ -135,10 +133,7 @@ export default function PaymentDashboard({
           <h2 className="text-xl font-black mt-0.5">Estado de Caja General del Curso</h2>
         </div>
 
-        {/* Ajustado grid-cols a sm:grid-cols-3 para acomodar perfectamente las 3 tarjetas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          
-          {/* 1 - TOTAL EGRESOS */}
           <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
             <div className="p-2.5 bg-red-500/20 text-red-400 rounded-xl"><TrendingDown size={20} /></div>
             <div>
@@ -147,7 +142,6 @@ export default function PaymentDashboard({
             </div>
           </div>
 
-          {/* 2 - FONDO INICIAL */}
           <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
             <div className="p-2.5 bg-blue-500/20 text-blue-400 rounded-xl"><Wallet size={20} /></div>
             <div>
@@ -156,7 +150,6 @@ export default function PaymentDashboard({
             </div>
           </div>
 
-          {/* 3 - SALDO REAL NETO (Ingresos + Fondo Inicial - Egresos) */}
           <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-inner ${
             saldoFinalDisponible >= 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20"
           }`}>
@@ -352,14 +345,13 @@ export default function PaymentDashboard({
                         <td className="p-3 font-black text-red-600">-${exp.amount.toLocaleString("es-CL")}</td>
                         <td className="p-3 text-center">
                           {exp.receiptUrl ? (
-                            <a 
-                              href={exp.receiptUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="inline-flex items-center gap-1 text-[10px] font-black text-brand-accent hover:underline bg-brand-accent/5 border border-brand-accent/10 px-2 py-0.5 rounded"
+                            <button 
+                              type="button"
+                              onClick={() => setReceiptModalUrl(exp.receiptUrl)} 
+                              className="inline-flex items-center gap-1 text-[10px] font-black text-brand-accent hover:bg-brand-accent/10 bg-brand-accent/5 border border-brand-accent/10 px-2 py-1 rounded transition-colors cursor-pointer"
                             >
                               <Eye size={12} /> Ver Boleta
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-[10px] text-gray-400 italic">Sin archivo</span>
                           )}
@@ -386,6 +378,51 @@ export default function PaymentDashboard({
         </div>
 
       </div>
+
+      {/* --- MODAL FLOTANTE PARA VER COMPROBANTES (IFRAME) --- */}
+      {receiptModalUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl overflow-hidden w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh]">
+            
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-brand-navy flex items-center gap-2">
+                <FileText size={18} className="text-brand-accent"/>
+                Comprobante Adjunto
+              </h3>
+              <button 
+                onClick={() => setReceiptModalUrl(null)}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors cursor-pointer"
+                title="Cerrar visor"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto bg-gray-100/50 p-2 sm:p-4 flex items-center justify-center min-h-[50vh]">
+              {/* Usamos iframe que es compatible nativamente con PDFs e imágenes */}
+              <iframe 
+                src={receiptModalUrl} 
+                className="w-full h-[60vh] rounded-xl border border-gray-200 bg-white shadow-sm"
+                title="Visor de Comprobante"
+              />
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+              <span className="text-xs text-gray-500">¿El documento no carga correctamente?</span>
+              <a 
+                href={receiptModalUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"
+              >
+                Abrir en pestaña nueva
+              </a>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
