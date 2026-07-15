@@ -11,7 +11,9 @@ import {
   Calendar,
   Receipt,
   UploadCloud,
-  XCircle
+  XCircle,
+  X,
+  Plus
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -30,6 +32,9 @@ interface AdminExpenseClientProps {
 }
 
 export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps) {
+  // Estado para el acordeón móvil
+  const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+
   // Estados del Formulario
   const [concept, setConcept] = useState("");
   const [amount, setAmount] = useState("");
@@ -70,6 +75,7 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
       setAmount("");
       setDate("");
       setReceiptUrl(null);
+      setIsMobileFormOpen(false); // Cerramos el formulario en móvil
       
       setAlertConfig({ isOpen: true, type: "success", title: "Gasto Registrado", message: "El egreso ha sido descontado de la caja exitosamente." });
     } catch (error) {
@@ -105,105 +111,118 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
       {/* --- COLUMNA IZQUIERDA: FORMULARIO DE REGISTRO --- */}
-      <form onSubmit={handleCreateExpense} className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 h-fit sticky top-6">
-        <div>
-          <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
-            <Receipt size={20} className="text-red-500" />
-            Registrar Nuevo Egreso
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5">Ingresa los detalles de la compra o pago.</p>
-        </div>
+      <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
+        
+        {/* BOTÓN MÓVIL PARA DESPLEGAR FORMULARIO */}
+        <button 
+          type="button"
+          onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
+          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
+        >
+          {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
+          {isMobileFormOpen ? "Ocultar Formulario" : "Registrar Nuevo Egreso"}
+        </button>
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Concepto / Descripción</label>
-            <input
-              type="text"
-              value={concept}
-              onChange={e => setConcept(e.target.value)}
-              placeholder="Ej: Compra de cartulinas y tijeras"
-              required
-              className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700"
-            />
+        <form onSubmit={handleCreateExpense} className={`bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 transition-all lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
+          <div>
+            <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
+              <Receipt size={20} className="text-red-500" />
+              Registrar Nuevo Egreso
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">Ingresa los detalles de la compra o pago.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Monto ($)</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Concepto / Descripción</label>
               <input
-                type="number"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="Ej: 15000"
+                type="text"
+                value={concept}
+                onChange={e => setConcept(e.target.value)}
+                placeholder="Ej: Compra de cartulinas y tijeras"
                 required
-                min="1"
                 className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fecha</label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700 bg-white cursor-pointer"
-              />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Monto ($)</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder="Ej: 15000"
+                  required
+                  min="1"
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fecha</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-700 bg-white cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* ZONA DE SUBIDA DE COMPROBANTE (OPCIONAL) */}
+            <div className="space-y-1 border-t border-gray-50 pt-4">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center justify-between">
+                Comprobante (Opcional)
+                {receiptUrl && <span className="text-emerald-500 text-[10px]">¡Archivo Cargado!</span>}
+              </label>
+              
+              {receiptUrl ? (
+                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-2">
+                    <FileText size={16} /> Boleta Adjunta
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => setReceiptUrl(null)}
+                    className="text-emerald-600 hover:text-red-500 transition-colors"
+                  >
+                    <XCircle size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2">
+                  <UploadDropzone
+                    endpoint="paymentReceiptUploader" // Reutilizamos el endpoint de pagos si tienes uno configurado
+                    onClientUploadComplete={(res) => {
+                      if (res && res[0]) {
+                        setReceiptUrl(res[0].url);
+                      }
+                    }}
+                    onUploadError={(error: Error) => {
+                      setAlertConfig({ isOpen: true, type: "error", title: "Error de subida", message: error.message });
+                    }}
+                    appearance={{
+                      button: "bg-brand-navy text-white text-xs py-1.5 px-3 rounded-lg",
+                      label: "text-gray-500 text-xs",
+                      allowedContent: "text-gray-400 text-[10px]"
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ZONA DE SUBIDA DE COMPROBANTE (OPCIONAL) */}
-          <div className="space-y-1 border-t border-gray-50 pt-4">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center justify-between">
-              Comprobante (Opcional)
-              {receiptUrl && <span className="text-emerald-500 text-[10px]">¡Archivo Cargado!</span>}
-            </label>
-            
-            {receiptUrl ? (
-              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
-                <span className="text-xs font-bold text-emerald-700 flex items-center gap-2">
-                  <FileText size={16} /> Boleta Adjunta
-                </span>
-                <button 
-                  type="button" 
-                  onClick={() => setReceiptUrl(null)}
-                  className="text-emerald-600 hover:text-red-500 transition-colors"
-                >
-                  <XCircle size={18} />
-                </button>
-              </div>
-            ) : (
-              <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2">
-                <UploadDropzone
-                  endpoint="paymentReceiptUploader" // Reutilizamos el endpoint de pagos si tienes uno configurado
-                  onClientUploadComplete={(res) => {
-                    if (res && res[0]) {
-                      setReceiptUrl(res[0].url);
-                    }
-                  }}
-                  onUploadError={(error: Error) => {
-                    setAlertConfig({ isOpen: true, type: "error", title: "Error de subida", message: error.message });
-                  }}
-                  appearance={{
-                    button: "bg-brand-navy text-white text-xs py-1.5 px-3 rounded-lg",
-                    label: "text-gray-500 text-xs",
-                    allowedContent: "text-gray-400 text-[10px]"
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-2.5 bg-red-600 text-white font-bold rounded-xl text-xs shadow-md shadow-red-600/10 hover:bg-red-700 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4"
-        >
-          {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <PlusCircle size={16} />}
-          {isSubmitting ? "Registrando..." : "Guardar Gasto en Historial"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-2.5 bg-red-600 text-white font-bold rounded-xl text-xs shadow-md shadow-red-600/10 hover:bg-red-700 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4"
+          >
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <PlusCircle size={16} />}
+            {isSubmitting ? "Registrando..." : "Guardar Gasto en Historial"}
+          </button>
+        </form>
+      </div>
 
       {/* --- COLUMNA DERECHA: HISTORIAL DE GASTOS --- */}
       <div className="lg:col-span-2 flex flex-col gap-4">
