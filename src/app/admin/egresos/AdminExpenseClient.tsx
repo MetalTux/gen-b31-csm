@@ -13,7 +13,8 @@ import {
   UploadCloud,
   XCircle,
   X,
-  Plus
+  Plus,
+  Eye // <-- Importamos el ícono Eye para ver el comprobante
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -34,6 +35,9 @@ interface AdminExpenseClientProps {
 export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps) {
   // Estado para el acordeón móvil
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+
+  // --- NUEVO ESTADO PARA EL MODAL DEL COMPROBANTE ---
+  const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null);
 
   // Estados del Formulario
   const [concept, setConcept] = useState("");
@@ -108,7 +112,7 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
       
       {/* --- COLUMNA IZQUIERDA: FORMULARIO DE REGISTRO --- */}
       <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
@@ -185,7 +189,7 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
                   <button 
                     type="button" 
                     onClick={() => setReceiptUrl(null)}
-                    className="text-emerald-600 hover:text-red-500 transition-colors"
+                    className="text-emerald-600 hover:text-red-500 transition-colors cursor-pointer"
                   >
                     <XCircle size={18} />
                   </button>
@@ -193,7 +197,7 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
               ) : (
                 <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2">
                   <UploadDropzone
-                    endpoint="paymentReceiptUploader" // Reutilizamos el endpoint de pagos si tienes uno configurado
+                    endpoint="paymentReceiptUploader"
                     onClientUploadComplete={(res) => {
                       if (res && res[0]) {
                         setReceiptUrl(res[0].url);
@@ -275,14 +279,13 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
                       <td className="p-4 font-black text-red-600">${exp.amount.toLocaleString("es-CL")}</td>
                       <td className="p-4">
                         {exp.receiptUrl ? (
-                          <a 
-                            href={exp.receiptUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 bg-emerald-50/50 px-2.5 py-1 rounded-lg border border-emerald-100 transition-colors"
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModalUrl(exp.receiptUrl)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 bg-emerald-50/50 px-2.5 py-1 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
                           >
-                            <FileText size={14} /> Boleta
-                          </a>
+                            <Eye size={14} /> Ver Boleta
+                          </button>
                         ) : (
                           <span className="text-[11px] text-gray-400 font-medium italic">Sin comprobante</span>
                         )}
@@ -306,9 +309,53 @@ export default function AdminExpenseClient({ expenses }: AdminExpenseClientProps
         </div>
       </div>
 
-      {/* Modales */}
+      {/* --- MODALES COMPARTIDOS --- */}
       <AlertModal isOpen={alertConfig.isOpen} type={alertConfig.type} title={alertConfig.title} message={alertConfig.message} onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))} />
       <ConfirmModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} isPending={processingId !== null} />
+      
+      {/* --- MODAL FLOTANTE PARA VER COMPROBANTES (IFRAME) --- */}
+      {receiptModalUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl overflow-hidden w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh]">
+            
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-brand-navy flex items-center gap-2">
+                <FileText size={18} className="text-brand-accent"/>
+                Comprobante Adjunto
+              </h3>
+              <button 
+                onClick={() => setReceiptModalUrl(null)}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors cursor-pointer"
+                title="Cerrar visor"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto bg-gray-100/50 p-2 sm:p-4 flex items-center justify-center min-h-[50vh]">
+              <iframe 
+                src={receiptModalUrl} 
+                className="w-full h-[60vh] rounded-xl border border-gray-200 bg-white shadow-sm"
+                title="Visor de Comprobante"
+              />
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+              <span className="text-xs text-gray-500">¿El documento no carga correctamente?</span>
+              <a 
+                href={receiptModalUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"
+              >
+                Abrir en pestaña nueva
+              </a>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

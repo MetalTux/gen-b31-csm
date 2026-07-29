@@ -29,7 +29,8 @@ import {
   Wallet,
   Landmark,
   Search,
-  Plus
+  Plus,
+  Eye // <-- Importamos el ícono Eye para el botón de ver comprobante
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -103,6 +104,9 @@ export default function AdminRevenueClient({
   
   // Estado para el acordeón móvil en formularios
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+
+  // --- NUEVO ESTADO PARA EL MODAL DEL COMPROBANTE ---
+  const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null);
 
   const [alertConfig, setAlertConfig] = useState<{
     isOpen: boolean;
@@ -303,7 +307,7 @@ export default function AdminRevenueClient({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
       {/* --- BARRA DE PESTAÑAS (TABS) --- */}
       <div className="flex border-b border-gray-200 gap-2 overflow-x-auto pb-1">
@@ -435,14 +439,13 @@ export default function AdminRevenueClient({
                       <td className="p-4 font-black text-brand-navy">${p.amount.toLocaleString("es-CL")}</td>
                       <td className="p-4">
                         {p.receiptUrl ? (
-                          <a 
-                            href={p.receiptUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModalUrl(p.receiptUrl)}
                             className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:underline cursor-pointer bg-brand-accent/5 px-2.5 py-1 rounded-lg border border-brand-accent/10"
                           >
-                            <FileText size={14} /> Ver Archivo
-                          </a>
+                            <Eye size={14} /> Ver Archivo
+                          </button>
                         ) : (
                           <span className="text-xs text-gray-400 italic">Sin archivo</span>
                         )}
@@ -698,9 +701,13 @@ export default function AdminRevenueClient({
                               </span>
                             )}
                             {p.receiptUrl !== "EFECTIVO" && p.receiptUrl !== "TRANSFERENCIA MANUAL" && (
-                              <a href={p.receiptUrl || "#"} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-blue-50 text-blue-700 border-blue-200 hover:underline inline-flex items-center gap-1">
-                                <FileText size={10} /> COMPROBANTE
-                              </a>
+                              <button 
+                                type="button"
+                                onClick={() => setReceiptModalUrl(p.receiptUrl)}
+                                className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-blue-50 text-blue-700 border-blue-200 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye size={10} /> COMPROBANTE
+                              </button>
                             )}
                           </td>
                           <td className="p-3 flex justify-center">
@@ -785,7 +792,6 @@ export default function AdminRevenueClient({
 
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col">
             
-            {/* --- HEADER CON BARRA DE BÚSQUEDA --- */}
             <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h3 className="text-base font-bold text-brand-navy">Cobros Vigentes en el Año Escolar</h3>
               <div className="relative">
@@ -845,6 +851,49 @@ export default function AdminRevenueClient({
         onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         isPending={processingId !== null}
       />
+
+      {/* --- MODAL FLOTANTE PARA VER COMPROBANTES (IFRAME) --- */}
+      {receiptModalUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl overflow-hidden w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh]">
+            
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-brand-navy flex items-center gap-2">
+                <FileText size={18} className="text-brand-accent"/>
+                Comprobante Adjunto
+              </h3>
+              <button 
+                onClick={() => setReceiptModalUrl(null)}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors cursor-pointer"
+                title="Cerrar visor"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto bg-gray-100/50 p-2 sm:p-4 flex items-center justify-center min-h-[50vh]">
+              <iframe 
+                src={receiptModalUrl} 
+                className="w-full h-[60vh] rounded-xl border border-gray-200 bg-white shadow-sm"
+                title="Visor de Comprobante"
+              />
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+              <span className="text-xs text-gray-500">¿El documento no carga correctamente?</span>
+              <a 
+                href={receiptModalUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"
+              >
+                Abrir en pestaña nueva
+              </a>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
