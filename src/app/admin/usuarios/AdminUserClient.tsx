@@ -5,19 +5,8 @@ import { useState } from "react";
 import { createUser, updateUser, deleteUser, toggleUserAccess } from "@/app/actions/user";
 import { Role, BoardPosition } from "@prisma/client";
 import { 
-  Loader2, 
-  Shield, 
-  User as UserIcon, 
-  Mail, 
-  ShieldAlert,
-  UserPlus,
-  Edit2,
-  Trash2,
-  X,
-  Ban,
-  UserCheck,
-  Plus,
-  Search // <-- Importamos el ícono de búsqueda
+  Loader2, Shield, User as UserIcon, Mail, ShieldAlert,
+  UserPlus, Edit2, Trash2, X, Ban, UserCheck, Plus, Search 
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -43,17 +32,18 @@ interface AdminUserClientProps {
   users: AppUser[];
 }
 
+// --- FUNCIÓN AUXILIAR PARA IGNORAR TILDES ---
+const removeAccents = (str: string) => {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
+
 export default function AdminUserClient({ users }: AdminUserClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   
-  // Estado para el acordeón móvil
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
-
-  // --- ESTADO PARA EL BUSCADOR ---
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Estados Formulario
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -63,30 +53,20 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
   const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
 
-  // --- LÓGICA DE FILTRADO EN TIEMPO REAL ---
+  // --- LÓGICA DE FILTRADO SIN TILDES ---
   const filteredUsers = users.filter((u) => {
-    const term = searchTerm.toLowerCase();
-    const nameMatch = u.name?.toLowerCase().includes(term) || false;
-    const emailMatch = u.email?.toLowerCase().includes(term) || false;
+    const term = removeAccents(searchTerm.toLowerCase());
+    const nameMatch = u.name ? removeAccents(u.name.toLowerCase()).includes(term) : false;
+    const emailMatch = u.email ? removeAccents(u.email.toLowerCase()).includes(term) : false;
     return nameMatch || emailMatch;
   });
 
   const resetForm = () => {
-    setEditingId(null);
-    setName("");
-    setEmail("");
-    setRole("USER");
-    setBoardPosition("TESORERO");
-    setIsMobileFormOpen(false);
+    setEditingId(null); setName(""); setEmail(""); setRole("USER"); setBoardPosition("TESORERO"); setIsMobileFormOpen(false);
   };
 
   const startEditing = (user: AppUser) => {
-    setEditingId(user.id);
-    setName(user.name || "");
-    setEmail(user.email || "");
-    setRole(user.role);
-    setBoardPosition(user.boardPosition || "TESORERO");
-    setIsMobileFormOpen(true); 
+    setEditingId(user.id); setName(user.name || ""); setEmail(user.email || ""); setRole(user.role); setBoardPosition(user.boardPosition || "TESORERO"); setIsMobileFormOpen(true); 
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -105,8 +85,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
       }
       resetForm();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Error de guardado.";
-      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
+      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error de guardado." });
     } finally {
       setIsSubmitting(false);
     }
@@ -114,8 +93,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
 
   const triggerDelete = (user: AppUser) => {
     setConfirmConfig({
-      isOpen: true,
-      title: `¿Eliminar a ${user.name || user.email}?`,
+      isOpen: true, title: `¿Eliminar a ${user.name || user.email}?`,
       message: "Esta acción borrará el acceso del usuario a la plataforma de forma permanente. Si el usuario ya tiene pagos registrados, el sistema bloqueará la eliminación por seguridad contable.",
       onConfirm: async () => {
         setProcessingId(user.id);
@@ -124,8 +102,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
           if (editingId === user.id) resetForm();
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "Error al eliminar.";
-          setAlertConfig({ isOpen: true, type: "error", title: "No se pudo eliminar", message: errorMessage });
+          setAlertConfig({ isOpen: true, type: "error", title: "No se pudo eliminar", message: error instanceof Error ? error.message : "Error al eliminar." });
         } finally {
           setProcessingId(null);
         }
@@ -135,22 +112,16 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
 
   const triggerToggleAccess = (user: AppUser) => {
     const newStatus = !user.isActive;
-    const actionText = newStatus ? "Reactivar Acceso" : "Suspender Cuenta";
-    
     setConfirmConfig({
-      isOpen: true,
-      title: `¿${actionText} a ${user.name || user.email}?`,
-      message: newStatus 
-        ? "El usuario recuperará inmediatamente su acceso a la plataforma."
-        : "Se le negará el acceso a la plataforma. No podrá ver el muro ni la información del curso hasta que lo reactives.",
+      isOpen: true, title: `¿${newStatus ? "Reactivar Acceso" : "Suspender Cuenta"} a ${user.name || user.email}?`,
+      message: newStatus ? "El usuario recuperará inmediatamente su acceso a la plataforma." : "Se le negará el acceso a la plataforma. No podrá ver el muro ni la información del curso hasta que lo reactives.",
       onConfirm: async () => {
         setProcessingId(user.id);
         try {
           await toggleUserAccess(user.id, newStatus);
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "Error al cambiar estado.";
-          setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
+          setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error al cambiar estado." });
         } finally {
           setProcessingId(null);
         }
@@ -163,12 +134,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
       
       {/* --- COLUMNA IZQUIERDA: FORMULARIO --- */}
       <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
-        
-        <button 
-          type="button"
-          onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
-          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
-        >
+        <button type="button" onClick={() => setIsMobileFormOpen(!isMobileFormOpen)} className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer">
           {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
           {isMobileFormOpen ? "Ocultar Formulario" : (editingId ? "Continuar Editando Usuario" : "Crear Pre-Registro")}
         </button>
@@ -180,14 +146,10 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                 {editingId ? <Edit2 size={20} className="text-amber-500" /> : <UserPlus size={20} className="text-brand-accent" />}
                 {editingId ? "Editar Usuario" : "Crear Pre-Registro"}
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {editingId ? "Actualiza datos y privilegios." : "Registra un apoderado manualmente."}
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{editingId ? "Actualiza datos y privilegios." : "Registra un apoderado manualmente."}</p>
             </div>
             {editingId && (
-              <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm cursor-pointer">
-                <X size={16} />
-              </button>
+              <button type="button" onClick={resetForm} className="p-1.5 bg-white text-gray-400 hover:text-red-500 rounded-full border border-gray-200 shadow-sm cursor-pointer"><X size={16} /></button>
             )}
           </div>
 
@@ -196,12 +158,10 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombre Completo</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Ej: Camila Rojas" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
             </div>
-
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Correo Electrónico</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Privilegios</label>
@@ -210,7 +170,6 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                   <option value="ADMIN">Directiva</option>
                 </select>
               </div>
-
               {role === "ADMIN" && (
                 <div className="space-y-1 animate-fade-in">
                   <label className="text-xs font-bold text-brand-navy uppercase tracking-wide">Cargo</label>
@@ -223,7 +182,6 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
               )}
             </div>
           </div>
-
           <button type="submit" disabled={isSubmitting} className={`w-full py-2.5 font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex justify-center items-center gap-2 pt-3 disabled:bg-gray-100 disabled:text-gray-400 ${editingId ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-brand-navy text-white hover:bg-opacity-95"}`}>
             {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : (editingId ? <Edit2 size={16} /> : <UserPlus size={16} />)}
             {isSubmitting ? "Guardando..." : (editingId ? "Guardar Cambios" : "Crear Usuario")}
@@ -233,23 +191,14 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
 
       {/* --- COLUMNA DERECHA: TABLA DE USUARIOS --- */}
       <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-fit">
-        
-        {/* --- HEADER CON BUSCADOR --- */}
         <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="font-bold text-sm text-brand-navy flex items-center gap-2">
             <Shield size={18} className="text-brand-accent" />
             Directorio de Usuarios ({filteredUsers.length})
           </div>
-          
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nombre o correo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent bg-white"
-            />
+            <input type="text" placeholder="Buscar por nombre o correo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent bg-white" />
           </div>
         </div>
 
@@ -261,12 +210,7 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
           ) : (
             <table className="w-full text-left border-collapse text-sm min-w-[600px]">
               <thead className="bg-gray-50 text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
-                <tr>
-                  <th className="p-4">Apoderado</th>
-                  <th className="p-4">Perfil / Privilegios</th>
-                  <th className="p-4">Alumnos a Cargo</th>
-                  <th className="p-4 text-center">Acciones</th>
-                </tr>
+                <tr><th className="p-4">Apoderado</th><th className="p-4">Perfil / Privilegios</th><th className="p-4">Alumnos a Cargo</th><th className="p-4 text-center">Acciones</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-50 text-gray-600">
                 {filteredUsers.map(u => (
@@ -281,66 +225,31 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                           </div>
                         )}
                         <div>
-                          <div className={`font-bold whitespace-nowrap ${!u.isActive ? "text-gray-400 line-through" : "text-brand-navy"}`}>
-                            {u.name || "Sin nombre"}
-                          </div>
-                          <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                            <Mail size={11} className="shrink-0"/> {u.email}
-                          </div>
-                          {!u.isActive && (
-                            <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md mt-1.5 inline-flex items-center gap-1 w-max">
-                              <Ban size={10} /> SUSPENDIDO
-                            </span>
-                          )}
+                          <div className={`font-bold whitespace-nowrap ${!u.isActive ? "text-gray-400 line-through" : "text-brand-navy"}`}>{u.name || "Sin nombre"}</div>
+                          <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5"><Mail size={11} className="shrink-0"/> {u.email}</div>
+                          {!u.isActive && (<span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md mt-1.5 inline-flex items-center gap-1 w-max"><Ban size={10} /> SUSPENDIDO</span>)}
                         </div>
                       </div>
                     </td>
-
                     <td className="p-4">
                       {u.role === "ADMIN" ? (
-                        <div>
-                          <span className={`text-xs font-bold border px-2 py-0.5 rounded-md inline-block mb-1 ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-red-700 bg-red-50 border-red-200"}`}>🛡️ DIRECTIVA</span>
-                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide pl-1">{u.boardPosition}</div>
-                        </div>
-                      ) : (
-                        <span className={`text-xs font-bold border px-2 py-0.5 rounded-md ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-gray-600 bg-gray-100 border-gray-200"}`}>👤 Apoderado</span>
-                      )}
+                        <div><span className={`text-xs font-bold border px-2 py-0.5 rounded-md inline-block mb-1 ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-red-700 bg-red-50 border-red-200"}`}>🛡️ DIRECTIVA</span><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide pl-1">{u.boardPosition}</div></div>
+                      ) : (<span className={`text-xs font-bold border px-2 py-0.5 rounded-md ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-gray-600 bg-gray-100 border-gray-200"}`}>👤 Apoderado</span>)}
                     </td>
-
                     <td className="p-4">
                       {u.students.length === 0 ? (
-                        <span className={`text-[10px] font-bold border px-2 py-1 rounded flex items-center gap-1 w-fit ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-amber-600 bg-amber-50 border-amber-100"}`}>
-                          <ShieldAlert size={12} /> Sin asignar
-                        </span>
+                        <span className={`text-[10px] font-bold border px-2 py-1 rounded flex items-center gap-1 w-fit ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-amber-600 bg-amber-50 border-amber-100"}`}><ShieldAlert size={12} /> Sin asignar</span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {u.students.map(s => (
-                            <span key={s.id} className={`text-[11px] font-bold border px-2 py-0.5 rounded-md truncate max-w-[150px] ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-emerald-700 bg-emerald-50 border-emerald-100"}`}>
-                              🎓 {s.firstName} {s.lastName}
-                            </span>
-                          ))}
+                          {u.students.map(s => (<span key={s.id} className={`text-[11px] font-bold border px-2 py-0.5 rounded-md truncate max-w-[150px] ${!u.isActive ? "text-gray-400 bg-gray-50 border-gray-200" : "text-emerald-700 bg-emerald-50 border-emerald-100"}`}>🎓 {s.firstName} {s.lastName}</span>))}
                         </div>
                       )}
                     </td>
-
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Editar">
-                          <Edit2 size={16} />
-                        </button>
-                        
-                        <button 
-                          onClick={() => triggerToggleAccess(u)} 
-                          disabled={processingId !== null} 
-                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isActive ? "text-amber-500 hover:bg-amber-50" : "text-emerald-500 hover:bg-emerald-50"}`} 
-                          title={u.isActive ? "Suspender Acceso" : "Reactivar Cuenta"}
-                        >
-                          {processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : u.isActive ? <Ban size={16} /> : <UserCheck size={16} />}
-                        </button>
-
-                        <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Eliminar">
-                          <Trash2 size={16} />
-                        </button>
+                        <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Editar"><Edit2 size={16} /></button>
+                        <button onClick={() => triggerToggleAccess(u)} disabled={processingId !== null} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isActive ? "text-amber-500 hover:bg-amber-50" : "text-emerald-500 hover:bg-emerald-50"}`} title={u.isActive ? "Suspender Acceso" : "Reactivar Cuenta"}>{processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : u.isActive ? <Ban size={16} /> : <UserCheck size={16} />}</button>
+                        <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Eliminar"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>

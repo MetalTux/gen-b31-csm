@@ -4,10 +4,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  createStudent, 
-  updateStudent, 
-  linkParentToStudent, 
-  unlinkParentFromStudent 
+  createStudent, updateStudent, linkParentToStudent, unlinkParentFromStudent 
 } from "@/app/actions/student";
 import { 
   Loader2, UserPlus, Link as LinkIcon, Mail, X, Users,
@@ -16,7 +13,6 @@ import {
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
-// --- INTERFACES ---
 interface Parent {
   id: string;
   name: string | null;
@@ -43,24 +39,28 @@ const MONTHS_MAP: { [key: number]: string } = {
   6: "Agosto", 7: "Septiembre", 8: "Octubre", 9: "Noviembre", 10: "Diciembre"
 };
 
+// --- FUNCIÓN AUXILIAR PARA IGNORAR TILDES ---
+const removeAccents = (str: string) => {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
+
 export default function AdminStudentClient({ students, availableParents }: AdminStudentClientProps) {
   const router = useRouter(); 
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
-
   const [activeTab, setActiveTab] = useState<"ACTIVOS" | "RETIRADOS">("ACTIVOS");
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
 
-  // --- ESTADOS DE BÚSQUEDA Y COMBOBOX ---
+  // Estados Búsqueda y ComboBox
   const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [parentSearchTerm, setParentSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
-  const [highlightedIndex, setHighlightedIndex] = useState(-1); // <-- Nuevo: Para la navegación por teclado
+  const [highlightedIndex, setHighlightedIndex] = useState(-1); 
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Estados Crear / Editar / Vincular
+  // Estados Formularios
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [startQuota, setStartQuota] = useState("1"); 
@@ -79,7 +79,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
   const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
 
-  // EFECTO 1: Clic afuera para cerrar el ComboBox
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -90,7 +89,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // EFECTO 2: Auto-Scroll para el ítem resaltado con el teclado
   useEffect(() => {
     if (highlightedIndex >= 0) {
       const el = document.getElementById(`parent-option-${highlightedIndex}`);
@@ -98,85 +96,70 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     }
   }, [highlightedIndex]);
 
-  // 1. LÓGICA DE FILTRADO DE ALUMNOS 
+  // --- 1. LÓGICA DE FILTRADO ALUMNOS SIN TILDES ---
   const filteredStudents = students.filter(s => {
     const matchesTab = activeTab === "ACTIVOS" ? s.isActive : !s.isActive;
-    const matchesSearch = `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase());
+    const normalizedSearch = removeAccents(studentSearchTerm.toLowerCase());
+    const normalizedName = removeAccents(`${s.firstName} ${s.lastName}`.toLowerCase());
+    const matchesSearch = normalizedName.includes(normalizedSearch);
     return matchesTab && matchesSearch;
   });
 
-  // 2. LÓGICA DE FILTRADO DE APODERADOS (Mejorada)
+  // --- 2. LÓGICA DE FILTRADO COMBOBOX APODERADOS SIN TILDES ---
   const unlinkedParents = availableParents.filter(
     (ap) => !selectedStudent?.parents.some((linkedParent) => linkedParent.id === ap.id)
   );
 
-  // Determinamos cuál es el texto exacto del apoderado si es que hay uno seleccionado
   const currentlySelectedParent = unlinkedParents.find(p => p.id === parentId);
   const selectedParentDisplay = currentlySelectedParent 
     ? (currentlySelectedParent.name ? `${currentlySelectedParent.name} (${currentlySelectedParent.email})` : currentlySelectedParent.email || "")
     : "";
 
-  // Si el texto del buscador es EXACTAMENTE IGUAL al apoderado seleccionado, simulamos que no hay filtro para mostrar la lista completa
   const effectiveSearchTerm = (parentId && parentSearchTerm === selectedParentDisplay) ? "" : parentSearchTerm;
+  const normalizedParentSearch = removeAccents(effectiveSearchTerm.toLowerCase());
   
-  const filteredUnlinkedParents = unlinkedParents.filter(p => 
-    (p.name?.toLowerCase() || "").includes(effectiveSearchTerm.toLowerCase()) || 
-    (p.email?.toLowerCase() || "").includes(effectiveSearchTerm.toLowerCase())
-  );
+  const filteredUnlinkedParents = unlinkedParents.filter(p => {
+    const nameMatch = p.name ? removeAccents(p.name.toLowerCase()).includes(normalizedParentSearch) : false;
+    const emailMatch = p.email ? removeAccents(p.email.toLowerCase()).includes(normalizedParentSearch) : false;
+    return nameMatch || emailMatch;
+  });
 
-  // MANEJADOR DE SELECCIÓN DE APODERADO
   const handleSelectParent = (parent: Parent) => {
     setParentId(parent.id);
     setParentSearchTerm(parent.name ? `${parent.name} (${parent.email})` : parent.email || "");
-    setIsDropdownOpen(false);
-    setHighlightedIndex(-1); // Reiniciamos el teclado
+    setIsDropdownOpen(false); setHighlightedIndex(-1);
   };
 
-  // MANEJADOR DE EVENTOS DE TECLADO
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isDropdownOpen) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setIsDropdownOpen(true);
-      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setIsDropdownOpen(true); }
       return;
     }
-
     if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightedIndex(prev => prev < filteredUnlinkedParents.length - 1 ? prev + 1 : prev);
+      e.preventDefault(); setHighlightedIndex(prev => prev < filteredUnlinkedParents.length - 1 ? prev + 1 : prev);
     } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
+      e.preventDefault(); setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
     } else if (e.key === "Enter") {
       if (highlightedIndex >= 0 && filteredUnlinkedParents[highlightedIndex]) {
-        e.preventDefault(); // Evitamos que se envíe el formulario entero
-        handleSelectParent(filteredUnlinkedParents[highlightedIndex]);
+        e.preventDefault(); handleSelectParent(filteredUnlinkedParents[highlightedIndex]);
       }
     } else if (e.key === "Escape") {
       setIsDropdownOpen(false);
     }
   };
 
-  // --- RESTO DE LAS FUNCIONES CRUD ---
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName || !lastName || !orderNumber || isSubmitting) return;
-
     setIsSubmitting(true);
     try {
-      await createStudent({
-        firstName, lastName, startQuotaNumber: parseInt(startQuota), orderNumber: parseInt(orderNumber)
-      });
+      await createStudent({ firstName, lastName, startQuotaNumber: parseInt(startQuota), orderNumber: parseInt(orderNumber) });
       setFirstName(""); setLastName(""); setStartQuota("1"); setOrderNumber("");
       setAlertConfig({ isOpen: true, type: "success", title: "Alumno Matriculado", message: "El registro ha sido creado exitosamente." });
       setActiveTab("ACTIVOS"); setIsMobileFormOpen(false); router.refresh(); 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Error al guardar.";
-      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: errorMessage });
-    } finally {
-      setIsSubmitting(false);
-    }
+      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error." });
+    } finally { setIsSubmitting(false); }
   };
 
   const activateEditMode = (student: Student) => {
@@ -184,13 +167,11 @@ export default function AdminStudentClient({ students, availableParents }: Admin
     setEditStartQuota(student.startQuotaNumber.toString()); setEditOrderNumber(student.orderNumber.toString());
     setIsMobileFormOpen(true); window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
   const cancelEditMode = () => { setEditingStudent(null); setIsMobileFormOpen(false); };
 
   const handleEditStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent || !editFirstName || !editLastName || !editOrderNumber || isSubmitting) return;
-
     setIsSubmitting(true);
     try {
       await updateStudent({
@@ -198,13 +179,11 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         startQuotaNumber: parseInt(editStartQuota), isActive: editingStudent.isActive, orderNumber: parseInt(editOrderNumber)
       });
       setEditingStudent(null); setIsMobileFormOpen(false);
-      setAlertConfig({ isOpen: true, type: "success", title: "Datos Actualizados", message: "La información se guardó correctamente." });
+      setAlertConfig({ isOpen: true, type: "success", title: "Actualizado", message: "La información se guardó correctamente." });
       router.refresh();
     } catch (error) {
-      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error al actualizar." });
-    } finally {
-      setIsSubmitting(false);
-    }
+      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error." });
+    } finally { setIsSubmitting(false); }
   };
 
   const openLinkModal = (student: Student) => {
@@ -215,25 +194,20 @@ export default function AdminStudentClient({ students, availableParents }: Admin
   const handleLinkParent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent || !parentId || isSubmitting) return;
-
     setIsSubmitting(true);
     try {
       await linkParentToStudent(selectedStudent.id, parentId);
       setParentId(""); setLinkModalOpen(false);
-      setAlertConfig({ isOpen: true, type: "success", title: "Apoderado Vinculado", message: "Asignado correctamente." });
+      setAlertConfig({ isOpen: true, type: "success", title: "Vinculado", message: "Asignado correctamente." });
       router.refresh();
     } catch (error) {
-      setAlertConfig({ isOpen: true, type: "error", title: "Error de Vinculación", message: error instanceof Error ? error.message : "Error." });
-    } finally {
-      setIsSubmitting(false);
-    }
+      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error." });
+    } finally { setIsSubmitting(false); }
   };
 
   const triggerUnlink = (studentId: string, parentId: string, parentEmailStr: string) => {
     setConfirmConfig({
-      isOpen: true,
-      title: "¿Desvincular Apoderado?",
-      message: `El usuario con correo ${parentEmailStr} perderá el acceso a este alumno. ¿Estás seguro?`,
+      isOpen: true, title: "¿Desvincular Apoderado?", message: `¿Quitar acceso a ${parentEmailStr}?`,
       onConfirm: async () => {
         setProcessingId(parentId);
         try {
@@ -241,9 +215,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
           setConfirmConfig(prev => ({ ...prev, isOpen: false })); router.refresh();
         } catch (error) {
           setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error." });
-        } finally {
-          setProcessingId(null);
-        }
+        } finally { setProcessingId(null); }
       }
     });
   };
@@ -264,53 +236,31 @@ export default function AdminStudentClient({ students, availableParents }: Admin
           if (editingStudent?.id === student.id) cancelEditMode(); router.refresh();
         } catch (error) {
           setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error." });
-        } finally {
-          setProcessingId(null);
-        }
+        } finally { setProcessingId(null); }
       }
     });
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
-      
       {/* --- COLUMNA IZQUIERDA: FORMULARIOS --- */}
       <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
-        
-        <button 
-          type="button" onClick={() => setIsMobileFormOpen(!isMobileFormOpen)}
-          className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer"
-        >
+        <button type="button" onClick={() => setIsMobileFormOpen(!isMobileFormOpen)} className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer">
           {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />}
-          {isMobileFormOpen ? "Ocultar Formulario" : (editingStudent ? "Continuar Editando Alumno" : "Matricular Nuevo Alumno")}
+          {isMobileFormOpen ? "Ocultar Formulario" : (editingStudent ? "Continuar Editando" : "Matricular Nuevo Alumno")}
         </button>
 
         <div className={`lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
           {editingStudent ? (
-            /* FORMULARIO DE EDICIÓN */
             <form onSubmit={handleEditStudent} className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-5 relative animate-fade-in">
-              <button type="button" onClick={cancelEditMode} className="absolute top-4 right-4 text-gray-400 hover:bg-white hover:text-gray-700 p-1.5 rounded-full transition-colors cursor-pointer" title="Cancelar edición">
-                <X size={18} />
-              </button>
-              <div>
-                <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><Pencil size={18} className="text-blue-500" /> Editar Alumno</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Modificando el registro de <span className="font-bold">{editingStudent.lastName}, {editingStudent.firstName}</span>.</p>
-              </div>
+              <button type="button" onClick={cancelEditMode} className="absolute top-4 right-4 text-gray-400 hover:bg-white hover:text-gray-700 p-1.5 rounded-full transition-colors cursor-pointer"><X size={18} /></button>
+              <div><h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><Pencil size={18} className="text-blue-500" /> Editar Alumno</h3></div>
               <div className="space-y-4">
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5"><Hash size={13} className="text-blue-500"/> N° de Lista</label><input type="number" value={editOrderNumber} onChange={e => setEditOrderNumber(e.target.value)} required min="1" className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-bold bg-white" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Nombres</label><input type="text" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Apellidos</label><input type="text" value={editLastName} onChange={e => setEditLastName(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white" /></div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5"><Hash size={13} className="text-blue-500"/> N° de Lista (Orden)</label>
-                  <input type="number" value={editOrderNumber} onChange={e => setEditOrderNumber(e.target.value)} required min="1" className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-bold bg-white" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
-                  <input type="text" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
-                  <input type="text" value={editLastName} onChange={e => setEditLastName(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Mes de Ingreso</label>
                   <div className="relative">
                     <select value={editStartQuota} onChange={e => setEditStartQuota(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white appearance-none cursor-pointer">
                       {[1,2,3,4,5,6,7,8,9,10].map(num => (<option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>))}
@@ -319,32 +269,19 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                   </div>
                 </div>
               </div>
-              <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 transition-all cursor-pointer disabled:bg-blue-300 flex justify-center items-center gap-2">
+              <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 disabled:bg-blue-300 flex justify-center items-center gap-2">
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Guardar Cambios"}
               </button>
             </form>
           ) : (
-            /* FORMULARIO DE CREACIÓN */
             <form onSubmit={handleCreateStudent} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
-              <div>
-                <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><UserPlus size={20} className="text-brand-accent" /> Matricular Alumno</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Ingresa los datos para registrar un niño en el curso.</p>
-              </div>
+              <div><h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><UserPlus size={20} className="text-brand-accent" /> Matricular Alumno</h3></div>
               <div className="space-y-4">
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5"><Hash size={13} className="text-brand-accent"/> N° de Lista</label><input type="number" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="Ej: 1" required min="1" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Nombres</label><input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Ej: Juan Pablo" required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Apellidos</label><input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Ej: Pérez González" required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700" /></div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5"><Hash size={13} className="text-brand-accent"/> N° de Lista (Orden)</label>
-                  <input type="number" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="Ej: 1" required min="1" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nombres</label>
-                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Ej: Juan Pablo" required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Apellidos</label>
-                  <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Ej: Pérez González" required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Mes de Ingreso</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Mes de Ingreso</label>
                   <div className="relative">
                     <select value={startQuota} onChange={e => setStartQuota(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white appearance-none cursor-pointer">
                       {[1,2,3,4,5,6,7,8,9,10].map(num => (<option key={num} value={num}>{MONTHS_MAP[num]} (Cuota {num})</option>))}
@@ -353,9 +290,8 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                   </div>
                 </div>
               </div>
-              <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 flex justify-center items-center gap-2">
-                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-                {isSubmitting ? "Guardando..." : "Crear Registro"}
+              <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-brand-navy text-white font-bold rounded-xl text-xs shadow-md hover:bg-opacity-95 disabled:bg-gray-100 disabled:text-gray-400 flex justify-center items-center gap-2">
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} {isSubmitting ? "Guardando..." : "Crear Registro"}
               </button>
             </form>
           )}
@@ -384,9 +320,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
           ) : (
             <table className="w-full text-left border-collapse text-sm min-w-[700px]">
               <thead className="bg-white text-gray-400 font-bold border-b border-gray-100">
-                <tr>
-                  <th className="p-4 w-[60px] text-center">N°</th><th className="p-4">Alumno</th><th className="p-4">Ingreso</th><th className="p-4 w-[280px]">Apoderado(s) Vinculado(s)</th><th className="p-4 text-center">Gestión</th>
-                </tr>
+                <tr><th className="p-4 w-[60px] text-center">N°</th><th className="p-4">Alumno</th><th className="p-4">Ingreso</th><th className="p-4 w-[280px]">Apoderado(s)</th><th className="p-4 text-center">Gestión</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-50 text-gray-600">
                 {filteredStudents.map(student => (
@@ -431,7 +365,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         </div>
       </div>
 
-      {/* --- MODAL FLOTANTE: VINCULAR APODERADO --- */}
+      {/* --- MODAL VINCULAR APODERADO --- */}
       {linkModalOpen && selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
@@ -444,25 +378,17 @@ export default function AdminStudentClient({ students, availableParents }: Admin
 
             <form onSubmit={handleLinkParent} className="space-y-4">
               <div className="space-y-1 relative" ref={dropdownRef}>
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Buscar y Seleccionar</label>
-                
+                <label className="text-xs font-bold text-gray-500 uppercase">Buscar y Seleccionar</label>
                 {unlinkedParents.length === 0 ? (
                   <div className="text-sm text-center p-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-500 italic">No hay más apoderados disponibles.</div>
                 ) : (
                   <div className="relative">
-                    <div className="relative flex items-center border border-gray-300 rounded-xl bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                    <div className="relative flex items-center border border-gray-300 rounded-xl bg-white focus-within:ring-2 focus-within:ring-blue-500">
                       <Search size={16} className="absolute left-3 text-gray-400" />
                       <input
-                        type="text" placeholder="Escribe un nombre o correo..."
-                        value={parentSearchTerm}
-                        onChange={(e) => {
-                          setParentSearchTerm(e.target.value);
-                          setIsDropdownOpen(true);
-                          if (parentId) setParentId(""); 
-                          setHighlightedIndex(-1); // Reiniciar el teclado al escribir
-                        }}
-                        onFocus={() => setIsDropdownOpen(true)}
-                        onKeyDown={handleKeyDown}
+                        type="text" placeholder="Escribe un nombre o correo..." value={parentSearchTerm}
+                        onChange={(e) => { setParentSearchTerm(e.target.value); setIsDropdownOpen(true); if (parentId) setParentId(""); setHighlightedIndex(-1); }}
+                        onFocus={() => setIsDropdownOpen(true)} onKeyDown={handleKeyDown}
                         className="w-full pl-9 pr-10 py-2.5 text-sm rounded-xl focus:outline-none text-gray-700 bg-transparent"
                       />
                       <button type="button" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="absolute right-2 p-1 text-gray-400 hover:text-gray-600 rounded-full cursor-pointer">
@@ -477,19 +403,12 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                         ) : (
                           filteredUnlinkedParents.map((parent, index) => (
                             <div 
-                              key={parent.id}
-                              id={`parent-option-${index}`}
-                              onMouseDown={() => handleSelectParent(parent)}
-                              onMouseEnter={() => setHighlightedIndex(index)}
-                              className={`p-3 text-sm cursor-pointer border-b border-gray-50 transition-colors ${
-                                (parentId === parent.id || highlightedIndex === index) ? "bg-blue-50 text-blue-700 font-bold" : "text-gray-700 hover:bg-gray-50"
-                              }`}
+                              key={parent.id} id={`parent-option-${index}`}
+                              onMouseDown={() => handleSelectParent(parent)} onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`p-3 text-sm cursor-pointer border-b border-gray-50 transition-colors ${(parentId === parent.id || highlightedIndex === index) ? "bg-blue-50 text-blue-700 font-bold" : "text-gray-700 hover:bg-gray-50"}`}
                             >
                               {parent.name ? (
-                                <div className="flex flex-col">
-                                  <span>{parent.name}</span>
-                                  <span className="text-[10px] text-gray-400 font-medium">{parent.email}</span>
-                                </div>
+                                <div className="flex flex-col"><span>{parent.name}</span><span className="text-[10px] text-gray-400 font-medium">{parent.email}</span></div>
                               ) : (<span>{parent.email}</span>)}
                             </div>
                           ))
@@ -499,7 +418,7 @@ export default function AdminStudentClient({ students, availableParents }: Admin
                   </div>
                 )}
               </div>
-              <button type="submit" disabled={isSubmitting || !parentId} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-blue-700 transition-all cursor-pointer disabled:bg-gray-200 disabled:text-gray-400 flex justify-center items-center gap-2 mt-2">
+              <button type="submit" disabled={isSubmitting || !parentId} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 flex justify-center items-center gap-2 mt-2">
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Vincular a la Cuenta"}
               </button>
             </form>
@@ -507,7 +426,6 @@ export default function AdminStudentClient({ students, availableParents }: Admin
         </div>
       )}
 
-      {/* --- SECCIÓN MODALES --- */}
       <AlertModal isOpen={alertConfig.isOpen} type={alertConfig.type} title={alertConfig.title} message={alertConfig.message} onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))} />
       <ConfirmModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} isPending={processingId !== null} />
     </div>
