@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { 
-  Menu, X, Megaphone, CreditCard, Users, ShieldCheck, Wallet, Receipt, Settings, LogOut, HelpCircle
+  Menu, X, Megaphone, CreditCard, Users, ShieldCheck, Wallet, Receipt, Settings, LogOut, HelpCircle, MessageSquare
 } from "lucide-react";
 import Image from "next/image";
 
@@ -99,13 +99,18 @@ export default function Sidebar({ userRole }: { userRole: string }) {
             <span>Pagos y Transparencia</span>
           </Link>
 
+          {/* NUEVO ENLACE PARA EL APODERADO */}
+          <Link onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }} href="/consultas" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/consultas") ? "bg-brand-accent text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+            <MessageSquare size={18} className={isActive("/consultas") ? "text-brand-navy" : "text-brand-accent"} />
+            <span>Centro de Consultas</span>
+          </Link>
+
           {userRole === "ADMIN" && (
             <>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 mt-8 px-2 border-t border-white/10 pt-6">
                 Directiva / Tesorería
               </p>
               
-              {/* CORREGIDO: Removido el borde especial 'border border-white/10' y el margen 'mt-4' */}
               <Link onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }} href="/admin/configuracion" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/admin/configuracion") ? "bg-white text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
                 <Settings size={18} className={isActive("/admin/configuracion") ? "text-brand-navy" : "text-gray-400"} />
                 <span>Configurar Año Escolar</span>
@@ -131,9 +136,16 @@ export default function Sidebar({ userRole }: { userRole: string }) {
                 <span>Registro de Egresos</span>
               </Link>
 
-              <Link onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }} href="/admin/encuestas" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/admin/enmcuestas") ? "bg-white text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
-                <HelpCircle size={18} className={isActive("/admin/egresos") ? "text-brand-navy" : "text-gray-400"} />
-                <span>Consultas y Encuestas</span>
+              {/* NUEVO ENLACE PARA LA BANDEJA DE CONSULTAS */}
+              <Link onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }} href="/admin/consultas" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/admin/consultas") ? "bg-white text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+                <MessageSquare size={18} className={isActive("/admin/consultas") ? "text-brand-navy" : "text-gray-400"} />
+                <span>Bandeja de Consultas</span>
+              </Link>
+
+              {/* ENLACE CORREGIDO PARA ENCUESTAS */}
+              <Link onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }} href="/admin/encuestas" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/admin/encuestas") ? "bg-white text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+                <HelpCircle size={18} className={isActive("/admin/encuestas") ? "text-brand-navy" : "text-gray-400"} />
+                <span>Gestión de Encuestas</span>
               </Link>
             </>
           )}

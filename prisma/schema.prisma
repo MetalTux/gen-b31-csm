@@ -16,12 +16,12 @@ model Account {
   type               String
   provider           String
   providerAccountId  String
-  refresh_token      String?  @db.Text
-  access_token       String?  @db.Text
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
   expires_at         Int?
   token_type         String?
   scope              String?
-  id_token           String?  @db.Text
+  id_token           String? @db.Text
   session_state      String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -58,6 +58,20 @@ enum BoardPosition {
   TESORERO
 }
 
+// --- NUEVOS ENUMS PARA CONSULTAS ---
+enum InquiryCategory {
+  ACADEMICA
+  FINANCIERA
+  LOGISTICA
+  GENERAL
+}
+
+enum InquiryStatus {
+  PENDIENTE
+  RESPONDIDA
+  CERRADA
+}
+
 // Configuración del Año Escolar
 model SchoolYear {
   id             String      @id @default(cuid())
@@ -75,6 +89,7 @@ model SchoolYear {
   activities     Activity[]
   extraFees      ExtraFee[]
   polls          Poll[]
+  inquiries      Inquiry[]   // <-- NUEVA RELACIÓN: Consultas del año escolar
 }
 
 // Tabla de Usuarios
@@ -90,26 +105,29 @@ model User {
   role          Role           @default(USER) 
   boardPosition BoardPosition? 
   
-  accounts      Account[]
-  sessions      Session[]
-  students      Student[]      
-  payments      Payment[]
-  comments      Comment[]
-  pollVotes     PollVote[]
+  accounts         Account[]
+  sessions         Session[]
+  students         Student[]      
+  payments         Payment[]
+  comments         Comment[]
+  pollVotes        PollVote[]
+  inquiries        Inquiry[]          // <-- NUEVA RELACIÓN: Consultas creadas por el usuario
+  inquiryResponses InquiryResponse[]  // <-- NUEVA RELACIÓN: Respuestas dadas por el usuario
 }
 
 // Tabla de Alumnos
 model Student {
-  id          String   @id @default(cuid())
-  firstName   String
-  lastName    String
-  orderNumber Int      @default(0)
-  isActive    Boolean  @default(true) 
-  startQuotaNumber Int       @default(1)
+  id               String     @id @default(cuid())
+  firstName        String
+  lastName         String
+  orderNumber      Int        @default(0)
+  isActive         Boolean    @default(true) 
+  startQuotaNumber Int        @default(1)
   
-  parents     User[]   
-  payments    Payment[]
-  pollVotes   PollVote[]
+  parents          User[]   
+  payments         Payment[]
+  pollVotes        PollVote[]
+  inquiries        Inquiry[]  // <-- NUEVA RELACIÓN: Consultas asociadas a este alumno
 }
 
 // Cobros Extraordinarios (Ej: Cumpleaños, Paseos)
@@ -177,18 +195,18 @@ model Activity {
 
 // Tabla de Comentarios (Interacción tipo blog)
 model Comment {
-  id          String   @id @default(cuid())
-  content     String   @db.Text
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
   
-  activityId  String
-  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// --- NUEVAS TABLAS PARA ENCUESTAS ---
+// --- TABLAS PARA ENCUESTAS ---
 
 // Tabla principal de la Encuesta/Consulta
 model Poll {
@@ -238,4 +256,46 @@ model PollVote {
 
   // REGLA DE NEGOCIO CLAVE: Un solo voto por Alumno por Encuesta
   @@unique([pollId, studentId]) 
+}
+
+// --- NUEVAS TABLAS PARA MÓDULO DE CONSULTAS (HELPDESK) ---
+
+model Inquiry {
+  id           String          @id @default(cuid())
+  title        String
+  content      String          @db.Text
+  category     InquiryCategory
+  status       InquiryStatus   @default(PENDIENTE)
+  isPublic     Boolean         @default(true)
+  
+  // Relación con el Año Escolar activo
+  schoolYearId String
+  schoolYear   SchoolYear      @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  // Apoderado creador de la consulta
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Opcional: ¿A qué alumno concierne la duda?
+  studentId    String?
+  student      Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  
+  responses    InquiryResponse[]
+  
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model InquiryResponse {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  
+  inquiryId   String
+  inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  
+  // Quién responde (Admin u otro apoderado)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
 }
