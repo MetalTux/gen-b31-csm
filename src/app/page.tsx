@@ -10,6 +10,7 @@ import { MessageSquare, ArrowRight } from "lucide-react";
 import ActivityForm from "@/components/ActivityForm";
 import ActivityCard from "@/components/ActivityCard";
 import PollWidget from "@/components/PollWidget";
+import UpcomingEventsWidget from "@/components/UpcomingEventsWidget"; // <-- Nuevo componente
 
 // --- CONFIGURACIÓN DE BASE DE DATOS (NEON) ---
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -63,7 +64,7 @@ export default async function Home() {
       isActive: true,
       OR: [
         { expiresAt: null },
-        { expiresAt: { gt: new Date() } } // Solo las que cierran en el futuro
+        { expiresAt: { gt: new Date() } } 
       ]
     },
     orderBy: { createdAt: "desc" },
@@ -73,11 +74,35 @@ export default async function Home() {
         orderBy: { id: "asc" }
       },
       _count: { select: { votes: true } },
-      // Traemos solo los votos de los hijos de este usuario para saber si ya votó
       votes: {
         where: { studentId: { in: studentIds } },
         include: { pollOption: { select: { text: true } } }
       }
+    }
+  });
+
+  // 5. NUEVO: Consulta para Próximos 6 Eventos
+  // Reseteamos las horas de hoy a 00:00:00 para no perder los eventos que ocurren durante el día actual
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingEvents = await prisma.event.findMany({
+    where: {
+      schoolYearId: activeYear?.id,
+      startDate: {
+        gte: today, // gte = Greater than or equal (Mayor o igual a hoy)
+      }
+    },
+    orderBy: {
+      startDate: "asc", // Los más próximos primero
+    },
+    take: 6, // Limitamos a los 6 más próximos
+    select: {
+      id: true,
+      title: true,
+      startDate: true,
+      isAllDay: true,
+      category: true,
     }
   });
 
@@ -118,9 +143,12 @@ export default async function Home() {
         </Link>
       </div>
 
-      {/* --- SECCIÓN 3: ENCUESTAS ACTIVAS --- */}
-      {/* El componente PollWidget ya tiene su propia validación visual si no hay encuestas */}
-      <PollWidget polls={activePolls} students={userStudents} userRole={userRole} />
+      {/* --- SECCIÓN 3: HERRAMIENTAS INTERACTIVAS (ENCUESTAS Y EVENTOS) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Usamos h-full en los widgets si queremos que midan lo mismo, pero items-start permite que cada uno mida lo que necesita */}
+        <PollWidget polls={activePolls} students={userStudents} userRole={userRole} />
+        <UpcomingEventsWidget events={upcomingEvents} />
+      </div>
 
       {/* --- SECCIÓN 4: HERRAMIENTAS DE ADMINISTRACIÓN --- */}
       {userRole === "ADMIN" && (

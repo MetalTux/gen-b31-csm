@@ -72,6 +72,15 @@ enum InquiryStatus {
   CERRADA
 }
 
+// --- NUEVO ENUM PARA EL CALENDARIO ---
+enum EventCategory {
+  ACADEMICO     // Pruebas, entregas de trabajos, presentaciones
+  REUNION       // Reuniones de apoderados o directiva
+  ACTIVIDAD     // Paseos, viajes de estudio, convivencias
+  FERIADO       // Días sin clases o feriados legales
+  OTRO          // Cualquier otro evento misceláneo
+}
+
 // Configuración del Año Escolar
 model SchoolYear {
   id             String      @id @default(cuid())
@@ -89,21 +98,22 @@ model SchoolYear {
   activities     Activity[]
   extraFees      ExtraFee[]
   polls          Poll[]
-  inquiries      Inquiry[]   // <-- NUEVA RELACIÓN: Consultas del año escolar
+  inquiries      Inquiry[]   
+  events         Event[]     // <-- NUEVA RELACIÓN: Eventos del año escolar
 }
 
 // Tabla de Usuarios
 model User {
-  id            String         @id @default(cuid())
-  name          String?
-  email         String?        @unique
-  emailVerified DateTime?
-  image         String?
+  id               String            @id @default(cuid())
+  name             String?
+  email            String?           @unique
+  emailVerified    DateTime?
+  image            String?
 
-  isActive      Boolean        @default(true)
+  isActive         Boolean           @default(true)
   
-  role          Role           @default(USER) 
-  boardPosition BoardPosition? 
+  role             Role              @default(USER) 
+  boardPosition    BoardPosition? 
   
   accounts         Account[]
   sessions         Session[]
@@ -111,8 +121,9 @@ model User {
   payments         Payment[]
   comments         Comment[]
   pollVotes        PollVote[]
-  inquiries        Inquiry[]          // <-- NUEVA RELACIÓN: Consultas creadas por el usuario
-  inquiryResponses InquiryResponse[]  // <-- NUEVA RELACIÓN: Respuestas dadas por el usuario
+  inquiries        Inquiry[]          
+  inquiryResponses InquiryResponse[]  
+  createdEvents    Event[]           // <-- NUEVA RELACIÓN: Eventos creados por el admin
 }
 
 // Tabla de Alumnos
@@ -127,7 +138,7 @@ model Student {
   parents          User[]   
   payments         Payment[]
   pollVotes        PollVote[]
-  inquiries        Inquiry[]  // <-- NUEVA RELACIÓN: Consultas asociadas a este alumno
+  inquiries        Inquiry[]  
 }
 
 // Cobros Extraordinarios (Ej: Cumpleaños, Paseos)
@@ -258,7 +269,7 @@ model PollVote {
   @@unique([pollId, studentId]) 
 }
 
-// --- NUEVAS TABLAS PARA MÓDULO DE CONSULTAS (HELPDESK) ---
+// --- TABLAS PARA MÓDULO DE CONSULTAS (HELPDESK) ---
 
 model Inquiry {
   id           String          @id @default(cuid())
@@ -298,4 +309,30 @@ model InquiryResponse {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
+}
+
+// --- NUEVA TABLA PARA EL MÓDULO DE CALENDARIO ---
+
+model Event {
+  id           String        @id @default(cuid())
+  title        String
+  description  String?       @db.Text
+  location     String?       // Ej: "Sala 7B", "Gimnasio", "Zoológico"
+  
+  startDate    DateTime      // Fecha y hora de inicio
+  endDate      DateTime?     // Fecha y hora de término (opcional)
+  isAllDay     Boolean       @default(false) // Si es true, ignoramos las horas de las fechas anteriores
+  
+  category     EventCategory @default(OTRO)
+  
+  // Relación con el Año Escolar
+  schoolYearId String
+  schoolYear   SchoolYear    @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  // Auditoría: Qué administrador creó el evento
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }

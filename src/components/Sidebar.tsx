@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { 
-  Menu, X, Megaphone, CreditCard, Users, ShieldCheck, Wallet, Receipt, Settings, LogOut, HelpCircle, MessageSquare
+  Menu, X, Megaphone, CreditCard, Users, ShieldCheck, Wallet, Receipt, Settings, LogOut, HelpCircle, MessageSquare, Calendar
 } from "lucide-react";
 import Image from "next/image";
 
@@ -126,6 +126,12 @@ export default function Sidebar({ userRole }: { userRole: string }) {
           <Link href="/consultas" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/consultas") ? "bg-brand-accent text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
             <MessageSquare size={18} className={isActive("/consultas") ? "text-brand-navy" : "text-brand-accent"} />
             <span>Centro de Consultas</span>
+          </Link>
+
+          {/* NUEVO ENLACE AL CALENDARIO */}
+          <Link href="/calendario" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive("/calendario") ? "bg-brand-accent text-brand-navy shadow-md" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+            <Calendar size={18} className={isActive("/calendario") ? "text-brand-navy" : "text-brand-accent"} />
+            <span>Calendario Escolar</span>
           </Link>
 
           {userRole === "ADMIN" && (
