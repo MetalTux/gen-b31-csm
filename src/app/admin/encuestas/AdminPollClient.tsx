@@ -50,9 +50,9 @@ interface Poll {
   questions: PollQuestion[];
 }
 
-// Interfaces para el Constructor del Formulario
-interface OptionForm { id: number; text: string; isCustomText: boolean; }
-interface QuestionForm { id: number; title: string; type: QuestionType; maxSelections?: number; maxTotalQuantity?: number; options: OptionForm[]; }
+// Para el Constructor (ID puede ser numérico para nuevos, o string para los que vienen de BD)
+interface OptionForm { id: string | number; text: string; isCustomText: boolean; }
+interface QuestionForm { id: string | number; title: string; type: QuestionType; maxSelections?: number | null; maxTotalQuantity?: number | null; options: OptionForm[]; }
 
 export default function AdminPollClient({ polls }: { polls: Poll[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,56 +60,89 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
   const [expandedPollId, setExpandedPollId] = useState<string | null>(null);
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
 
-  // Estados del Formulario
+  // Estados del Constructor Principal
+  const [editingPollId, setEditingPollId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
-  
   const [questions, setQuestions] = useState<QuestionForm[]>([
     { id: 1, title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }
   ]);
 
-  // Estados Formulario Editar Metadatos
-  const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editExpiresAt, setEditExpiresAt] = useState("");
-
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
   const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
 
-  // --- LÓGICA DEL CONSTRUCTOR DE FORMULARIOS ---
+  // --- LÓGICA DEL CONSTRUCTOR ---
+  const resetForm = () => {
+    setEditingPollId(null);
+    setTitle("");
+    setDescription("");
+    setExpiresAt("");
+    setQuestions([{ id: 1, title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
+  };
+
   const addQuestion = () => {
     setQuestions([...questions, { id: Date.now(), title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
   };
   
-  const removeQuestion = (qId: number) => {
+  const removeQuestion = (qId: string | number) => {
     if (questions.length > 1) setQuestions(questions.filter(q => q.id !== qId));
   };
 
-  // SOLUCIÓN: Usamos genéricos (<K>) para evitar el uso de 'any'
-  const updateQuestion = <K extends keyof QuestionForm>(qId: number, field: K, value: QuestionForm[K]) => {
+  const updateQuestion = <K extends keyof QuestionForm>(qId: string | number, field: K, value: QuestionForm[K]) => {
     setQuestions(questions.map(q => q.id === qId ? { ...q, [field]: value } : q));
   };
 
-  const addOption = (qId: number) => {
+  const addOption = (qId: string | number) => {
     setQuestions(questions.map(q => q.id === qId ? { ...q, options: [...q.options, { id: Date.now(), text: "", isCustomText: false }] } : q));
   };
 
-  // SOLUCIÓN: Usamos genéricos (<K>) para evitar el uso de 'any'
-  const updateOption = <K extends keyof OptionForm>(qId: number, optId: number, field: K, value: OptionForm[K]) => {
+  const updateOption = <K extends keyof OptionForm>(qId: string | number, optId: string | number, field: K, value: OptionForm[K]) => {
     setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.map(o => o.id === optId ? { ...o, [field]: value } : o) } : q));
   };
 
-  const removeOption = (qId: number, optId: number) => {
+  const removeOption = (qId: string | number, optId: string | number) => {
     setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.filter(o => o.id !== optId) } : q));
   };
 
+  // Carga la encuesta existente en el constructor para editar
+  const openEditMode = (poll: Poll) => {
+    setEditingPollId(poll.id);
+    setTitle(poll.title);
+    setDescription(poll.description || "");
+    
+    if (poll.expiresAt) {
+      const date = new Date(poll.expiresAt);
+      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+      setExpiresAt(date.toISOString().slice(0, 16));
+    } else {
+      setExpiresAt("");
+    }
+
+    setQuestions(poll.questions.map(q => ({
+      id: q.id,
+      title: q.title,
+      type: q.type,
+      maxSelections: q.maxSelections,
+      maxTotalQuantity: q.maxTotalQuantity,
+      options: q.options.map(o => ({
+        id: o.id,
+        text: o.text,
+        isCustomText: o.isCustomText
+      }))
+    })));
+
+    setIsMobileFormOpen(true);
+    // Hacemos scroll suave hacia arriba para que el usuario vea el formulario cargado
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // --- ACCIONES CON LA BASE DE DATOS ---
-  const handleCreatePoll = async (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || questions.length === 0 || isSubmitting) return;
 
+    // Validación
     for (const q of questions) {
       if (!q.title.trim()) return setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Todas las preguntas deben tener un título." });
       if (q.options.length < 2) return setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Cada pregunta debe tener al menos 2 opciones." });
@@ -121,45 +154,39 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     setIsSubmitting(true);
     try {
       const dateParsed = expiresAt ? new Date(expiresAt) : null;
-      await createPoll({ 
-        title, description, expiresAt: dateParsed, 
-        questions: questions.map(q => ({
-          title: q.title, type: q.type, maxSelections: q.maxSelections || null, maxTotalQuantity: q.maxTotalQuantity || null,
-          options: q.options.map(o => ({ text: o.text, isCustomText: o.isCustomText }))
-        })) 
-      });
       
-      setTitle(""); setDescription(""); setExpiresAt("");
-      setQuestions([{ id: 1, title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
-      setAlertConfig({ isOpen: true, type: "success", title: "Formulario Creado", message: "La consulta ya está disponible." });
+      if (editingPollId) {
+        // Estamos ACTUALIZANDO
+        await updatePoll({
+          pollId: editingPollId,
+          title,
+          description,
+          expiresAt: dateParsed,
+          questions: questions.map(q => ({
+            id: q.id, title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity,
+            options: q.options.map(o => ({ id: o.id, text: o.text, isCustomText: o.isCustomText }))
+          }))
+        });
+        setAlertConfig({ isOpen: true, type: "success", title: "Encuesta Actualizada", message: "Los cambios de estructura se han guardado con éxito." });
+      } else {
+        // Estamos CREANDO
+        await createPoll({ 
+          title, description, expiresAt: dateParsed, 
+          questions: questions.map(q => ({
+            title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity,
+            options: q.options.map(o => ({ text: o.text, isCustomText: o.isCustomText }))
+          })) 
+        });
+        setAlertConfig({ isOpen: true, type: "success", title: "Formulario Creado", message: "La consulta ya está disponible." });
+      }
+      
+      resetForm();
       setIsMobileFormOpen(false);
     } catch (error) {
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error al guardar." });
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const openEditModal = (poll: Poll) => {
-    setEditingPoll(poll); setEditTitle(poll.title); setEditDescription(poll.description || "");
-    if (poll.expiresAt) {
-      const date = new Date(poll.expiresAt);
-      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-      setEditExpiresAt(date.toISOString().slice(0, 16));
-    } else { setEditExpiresAt(""); }
-  };
-
-  const handleUpdatePoll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPoll || !editTitle || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await updatePoll(editingPoll.id, editTitle, editDescription, editExpiresAt ? new Date(editExpiresAt) : null);
-      setEditingPoll(null);
-      setAlertConfig({ isOpen: true, type: "success", title: "Actualizado", message: "La encuesta ha sido modificada." });
-    } catch {
-      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudieron guardar los cambios." });
-    } finally { setIsSubmitting(false); }
   };
 
   const triggerToggleStatus = (poll: Poll) => {
@@ -203,16 +230,26 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 relative">
       
-      {/* --- COLUMNA IZQUIERDA: CREAR ENCUESTA (CONSTRUCTOR) --- */}
+      {/* --- COLUMNA IZQUIERDA: CREAR/EDITAR ENCUESTA (CONSTRUCTOR) --- */}
       <div className="xl:col-span-1 h-fit xl:sticky xl:top-6 flex flex-col gap-4">
         <button onClick={() => setIsMobileFormOpen(!isMobileFormOpen)} className="flex xl:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm cursor-pointer">
           {isMobileFormOpen ? <X size={18} /> : <Plus size={18} />} {isMobileFormOpen ? "Ocultar Creador" : "Crear Formulario Dinámico"}
         </button>
 
-        <form onSubmit={handleCreatePoll} className={`bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6 transition-all xl:block! max-h-[85vh] overflow-y-auto custom-scrollbar ${isMobileFormOpen ? 'block' : 'hidden'}`}>
-          <div>
-            <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><HelpCircle size={20} className="text-brand-accent" /> Constructor Dinámico</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Diseña encuestas con múltiples secciones.</p>
+        <form onSubmit={handleSubmitForm} className={`bg-white p-6 rounded-2xl border ${editingPollId ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'border-gray-100'} shadow-sm space-y-6 transition-all xl:block! max-h-[85vh] overflow-y-auto custom-scrollbar ${isMobileFormOpen ? 'block' : 'hidden'}`}>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-bold text-brand-navy flex items-center gap-2">
+                {editingPollId ? <Pencil size={20} className="text-brand-accent" /> : <HelpCircle size={20} className="text-brand-accent" />} 
+                {editingPollId ? "Editando Formulario" : "Constructor Dinámico"}
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">{editingPollId ? "Modifica textos, añade o quita opciones." : "Diseña encuestas con múltiples secciones."}</p>
+            </div>
+            {editingPollId && (
+              <button type="button" onClick={resetForm} className="text-xs font-bold text-gray-400 hover:text-gray-700 bg-gray-100 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">
+                Cancelar Edición
+              </button>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -231,10 +268,10 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
 
             {/* SECCIONES (PREGUNTAS) */}
             <div className="space-y-6 border-t border-gray-100 pt-4">
-              <label className="text-sm font-black text-brand-navy flex items-center justify-between">
-                Secciones del Formulario
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-black text-brand-navy">Secciones / Preguntas</label>
                 <button type="button" onClick={addQuestion} className="text-xs text-blue-600 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg hover:bg-blue-100 cursor-pointer"><Plus size={14}/> Agregar</button>
-              </label>
+              </div>
 
               {questions.map((q, qIndex) => (
                 <div key={q.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 relative">
@@ -250,23 +287,23 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-500 uppercase">Tipo de Respuesta</label>
                     <select value={q.type} onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white cursor-pointer">
-                      <option value="SINGLE_CHOICE">Única (Solo puede elegir 1 opción)</option>
-                      <option value="MULTIPLE_CHOICE">Múltiple (Puede elegir varias opciones)</option>
-                      <option value="QUANTITY">Cantidades (Ej: 3 empanadas a repartir)</option>
+                      <option value="SINGLE_CHOICE">Única (Solo 1 opción)</option>
+                      <option value="MULTIPLE_CHOICE">Múltiple (Elegir varias opciones)</option>
+                      <option value="QUANTITY">Cantidades (Repartir por números)</option>
                     </select>
                   </div>
 
                   {q.type === "MULTIPLE_CHOICE" && (
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase">Máximo de Opciones Permitidas</label>
-                      <input type="number" min="1" placeholder="Ej: 2" value={q.maxSelections || ''} onChange={e => updateQuestion(q.id, 'maxSelections', parseInt(e.target.value))} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300" />
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">Máximo de Opciones (Opcional)</label>
+                      <input type="number" min="1" placeholder="Sin límite" value={q.maxSelections || ''} onChange={e => updateQuestion(q.id, 'maxSelections', e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300" />
                     </div>
                   )}
 
                   {q.type === "QUANTITY" && (
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-500 uppercase">Cantidad Total Máxima a elegir</label>
-                      <input type="number" min="1" placeholder="Ej: 3" value={q.maxTotalQuantity || ''} onChange={e => updateQuestion(q.id, 'maxTotalQuantity', parseInt(e.target.value))} required className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-amber-50" />
+                      <input type="number" min="1" placeholder="Ej: 3" value={q.maxTotalQuantity || ''} onChange={e => updateQuestion(q.id, 'maxTotalQuantity', e.target.value ? parseInt(e.target.value) : null)} required className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-amber-50" />
                     </div>
                   )}
 
@@ -282,7 +319,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
                           <input type="checkbox" id={`custom-${opt.id}`} checked={opt.isCustomText} onChange={e => updateOption(q.id, opt.id, 'isCustomText', e.target.checked)} className="rounded border-gray-300 cursor-pointer" />
-                          {/* SOLUCIÓN JSX: Escapar comillas con &quot; */}
                           <label htmlFor={`custom-${opt.id}`} className="text-[10px] text-gray-500 cursor-pointer">Requerir texto al usuario (Ej: &quot;Otros&quot;)</label>
                         </div>
                       </div>
@@ -295,7 +331,7 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
           </div>
 
           <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-brand-navy text-white font-bold rounded-xl text-sm shadow-md hover:bg-opacity-95 transition-all cursor-pointer disabled:bg-gray-200 flex justify-center items-center gap-2">
-            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Publicar Formulario"}
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : (editingPollId ? "Guardar Cambios" : "Publicar Formulario")}
           </button>
         </form>
       </div>
@@ -327,7 +363,7 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                     </div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-black text-brand-navy">{poll.title}</h3>
-                      <button onClick={() => openEditModal(poll)} className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-md cursor-pointer"><Pencil size={14} /></button>
+                      <button onClick={() => openEditMode(poll)} className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-md cursor-pointer transition-colors" title="Editar Estructura"><Pencil size={14} /></button>
                     </div>
                     {poll.description && <p className="text-sm text-gray-600 mt-1">{poll.description}</p>}
                     {poll.expiresAt && (
@@ -411,7 +447,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                                       <div key={v.id} className="flex items-start gap-1">
                                         <span className="text-brand-accent font-bold">[{v.quantity}]</span>
                                         <span className="font-medium text-gray-700">{v.pollOption.text}</span>
-                                        {/* SOLUCIÓN JSX: Escapar comillas con &quot; */}
                                         {v.customText && <span className="text-gray-500 italic ml-1">&quot;{v.customText}&quot;</span>}
                                       </div>
                                     ))}
@@ -434,21 +469,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
         )}
       </div>
 
-      {/* --- MODAL DE EDICIÓN FLOTANTE (Solo Metadatos) --- */}
-      {editingPoll && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
-            <button onClick={() => setEditingPoll(null)} className="absolute top-4 right-4 text-gray-400 hover:bg-gray-100 p-1.5 rounded-full cursor-pointer"><X size={18} /></button>
-            <form onSubmit={handleUpdatePoll} className="space-y-4">
-              <h3 className="text-xl font-black text-brand-navy text-center mb-4">Editar Encuesta</h3>
-              <div className="space-y-1"><label className="text-xs font-bold text-gray-500">Título</label><input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300" /></div>
-              <div className="space-y-1"><label className="text-xs font-bold text-gray-500">Descripción</label><textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={3} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 resize-none" /></div>
-              <div className="space-y-1"><label className="text-xs font-bold text-gray-500">Vencimiento</label><input type="datetime-local" value={editExpiresAt} onChange={e => setEditExpiresAt(e.target.value)} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 bg-white" /></div>
-              <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 cursor-pointer">{isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Guardar Cambios"}</button>
-            </form>
-          </div>
-        </div>
-      )}
       <AlertModal isOpen={alertConfig.isOpen} type={alertConfig.type} title={alertConfig.title} message={alertConfig.message} onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))} />
       <ConfirmModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} isPending={processingId !== null} />
     </div>
