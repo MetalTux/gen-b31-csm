@@ -58,7 +58,7 @@ enum BoardPosition {
   TESORERO
 }
 
-// --- NUEVOS ENUMS PARA CONSULTAS ---
+// --- ENUMS PARA CONSULTAS ---
 enum InquiryCategory {
   ACADEMICA
   FINANCIERA
@@ -72,13 +72,20 @@ enum InquiryStatus {
   CERRADA
 }
 
-// --- NUEVO ENUM PARA EL CALENDARIO ---
+// --- ENUM PARA EL CALENDARIO ---
 enum EventCategory {
   ACADEMICO     // Pruebas, entregas de trabajos, presentaciones
   REUNION       // Reuniones de apoderados o directiva
   ACTIVIDAD     // Paseos, viajes de estudio, convivencias
   FERIADO       // Días sin clases o feriados legales
   OTRO          // Cualquier otro evento misceláneo
+}
+
+// --- NUEVO: ENUM PARA ENCUESTAS DINÁMICAS ---
+enum QuestionType {
+  SINGLE_CHOICE   // Ej: Elija solo un menú
+  MULTIPLE_CHOICE // Ej: Elija las actividades en las que participará
+  QUANTITY        // Ej: Reparta 3 empanadas entre estos sabores
 }
 
 // Configuración del Año Escolar
@@ -99,7 +106,7 @@ model SchoolYear {
   extraFees      ExtraFee[]
   polls          Poll[]
   inquiries      Inquiry[]   
-  events         Event[]     // <-- NUEVA RELACIÓN: Eventos del año escolar
+  events         Event[]     // Eventos del año escolar
 }
 
 // Tabla de Usuarios
@@ -123,7 +130,7 @@ model User {
   pollVotes        PollVote[]
   inquiries        Inquiry[]          
   inquiryResponses InquiryResponse[]  
-  createdEvents    Event[]           // <-- NUEVA RELACIÓN: Eventos creados por el admin
+  createdEvents    Event[]           // Eventos creados por el admin
 }
 
 // Tabla de Alumnos
@@ -217,56 +224,78 @@ model Comment {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// --- TABLAS PARA ENCUESTAS ---
+// --- NUEVA ARQUITECTURA PARA ENCUESTAS DINÁMICAS ---
 
-// Tabla principal de la Encuesta/Consulta
+// 1. Tabla principal de la Encuesta/Formulario
 model Poll {
-  id           String       @id @default(cuid())
-  title        String       // Ej: "Elección del menú para el paseo"
-  description  String?      @db.Text
-  createdAt    DateTime     @default(now())
-  expiresAt    DateTime?    // Fecha límite para votar
-  isActive     Boolean      @default(true)
+  id           String         @id @default(cuid())
+  title        String         // Ej: "Formulario Paseo de Fin de Año"
+  description  String?        @db.Text
+  createdAt    DateTime       @default(now())
+  expiresAt    DateTime?      
+  isActive     Boolean        @default(true)
   
   schoolYearId String
-  schoolYear   SchoolYear   @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  schoolYear   SchoolYear     @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
   
-  options      PollOption[] // Relación con las opciones disponibles
-  votes        PollVote[]   // Historial de todos los votos emitidos
+  // Ahora la encuesta está dividida en preguntas/secciones
+  questions    PollQuestion[] 
 }
 
-// Tabla de las opciones a elegir dentro de una encuesta
+// 2. Las secciones o preguntas de una encuesta
+model PollQuestion {
+  id               String       @id @default(cuid())
+  title            String       // Ej: "Indique los sabores de empanadas"
+  type             QuestionType @default(SINGLE_CHOICE)
+  
+  maxSelections    Int?         // Para MULTIPLE_CHOICE (Ej: Elija máximo 2 opciones)
+  maxTotalQuantity Int?         // Para QUANTITY (Ej: Máximo 3 empanadas en total)
+  
+  pollId           String
+  poll             Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  
+  options          PollOption[]
+  votes            PollVote[]
+}
+
+// 3. Las opciones a elegir dentro de una pregunta
 model PollOption {
-  id        String     @id @default(cuid())
-  text      String     // Ej: "Opción 1: Completos", "Opción 2: Empanadas"
+  id           String       @id @default(cuid())
+  text         String       // Ej: "Pino", "Queso"
+  isCustomText Boolean      @default(false) // Si es TRUE, abre caja de texto para "Otros"
   
-  pollId    String
-  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     PollQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
   
-  votes     PollVote[] // Votos específicos que recibió esta opción
+  votes        PollVote[]
 }
 
-// Tabla de los votos emitidos (El peso del voto es por ALUMNO)
+// 4. Los votos emitidos
 model PollVote {
-  id           String     @id @default(cuid())
-  createdAt    DateTime   @default(now())
+  id           String       @id @default(cuid())
+  createdAt    DateTime     @default(now())
   
-  pollId       String
-  poll         Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  // Cantidad asignada a esta opción específica
+  quantity     Int          @default(1)
+  
+  // Texto capturado si la opción era "isCustomText" (Otros)
+  customText   String?      @db.Text
+  
+  questionId   String
+  question     PollQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
   
   pollOptionId String
-  pollOption   PollOption @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+  pollOption   PollOption   @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
   
-  // Apoderado que emitió la acción (para auditoría)
   userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Alumno por el cual se está votando
   studentId    String
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  // REGLA DE NEGOCIO CLAVE: Un solo voto por Alumno por Encuesta
-  @@unique([pollId, studentId]) 
+  // REGLA CLAVE: Un alumno solo puede tener UN registro por opción, por pregunta.
+  // Si quiere 2 de pino, se actualiza la "quantity" en esa misma fila, no se crean dos filas.
+  @@unique([questionId, pollOptionId, studentId]) 
 }
 
 // --- TABLAS PARA MÓDULO DE CONSULTAS (HELPDESK) ---
@@ -279,15 +308,12 @@ model Inquiry {
   status       InquiryStatus   @default(PENDIENTE)
   isPublic     Boolean         @default(true)
   
-  // Relación con el Año Escolar activo
   schoolYearId String
   schoolYear   SchoolYear      @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
   
-  // Apoderado creador de la consulta
   userId       String
   user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Opcional: ¿A qué alumno concierne la duda?
   studentId    String?
   student      Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
   
@@ -304,14 +330,13 @@ model InquiryResponse {
   inquiryId   String
   inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   
-  // Quién responde (Admin u otro apoderado)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
 }
 
-// --- NUEVA TABLA PARA EL MÓDULO DE CALENDARIO ---
+// --- TABLA PARA EL MÓDULO DE CALENDARIO ---
 
 model Event {
   id           String        @id @default(cuid())
@@ -325,11 +350,9 @@ model Event {
   
   category     EventCategory @default(OTRO)
   
-  // Relación con el Año Escolar
   schoolYearId String
   schoolYear   SchoolYear    @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
   
-  // Auditoría: Qué administrador creó el evento
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   
