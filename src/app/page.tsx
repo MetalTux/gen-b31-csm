@@ -10,7 +10,7 @@ import { MessageSquare, ArrowRight } from "lucide-react";
 import ActivityForm from "@/components/ActivityForm";
 import ActivityCard from "@/components/ActivityCard";
 import PollWidget from "@/components/PollWidget";
-import UpcomingEventsWidget from "@/components/UpcomingEventsWidget"; // <-- Nuevo componente
+import UpcomingEventsWidget from "@/components/UpcomingEventsWidget";
 
 // --- CONFIGURACIÓN DE BASE DE DATOS (NEON) ---
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -57,7 +57,7 @@ export default async function Home() {
   });
   const studentIds = userStudents.map(s => s.id);
 
-  // 4. Consulta: Encuestas Activas y Vigentes
+  // 4. CORRECCIÓN: Consulta Encuestas Activas (con la nueva arquitectura de preguntas)
   const activePolls = await prisma.poll.findMany({
     where: {
       schoolYearId: activeYear?.id,
@@ -69,20 +69,23 @@ export default async function Home() {
     },
     orderBy: { createdAt: "desc" },
     include: {
-      options: {
-        include: { _count: { select: { votes: true } } },
-        orderBy: { id: "asc" }
-      },
-      _count: { select: { votes: true } },
-      votes: {
-        where: { studentId: { in: studentIds } },
-        include: { pollOption: { select: { text: true } } }
+      // Ahora incluimos las preguntas (questions) en lugar de options directamente
+      questions: {
+        orderBy: { id: "asc" },
+        include: {
+          options: {
+            orderBy: { id: "asc" }
+          },
+          votes: {
+            where: { studentId: { in: studentIds } },
+            include: { pollOption: { select: { text: true } } }
+          }
+        }
       }
     }
   });
 
-  // 5. NUEVO: Consulta para Próximos 6 Eventos
-  // Reseteamos las horas de hoy a 00:00:00 para no perder los eventos que ocurren durante el día actual
+  // 5. Consulta para Próximos 6 Eventos (Calendario)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -90,13 +93,13 @@ export default async function Home() {
     where: {
       schoolYearId: activeYear?.id,
       startDate: {
-        gte: today, // gte = Greater than or equal (Mayor o igual a hoy)
+        gte: today, 
       }
     },
     orderBy: {
-      startDate: "asc", // Los más próximos primero
+      startDate: "asc", 
     },
-    take: 6, // Limitamos a los 6 más próximos
+    take: 6, 
     select: {
       id: true,
       title: true,
@@ -145,7 +148,6 @@ export default async function Home() {
 
       {/* --- SECCIÓN 3: HERRAMIENTAS INTERACTIVAS (ENCUESTAS Y EVENTOS) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Usamos h-full en los widgets si queremos que midan lo mismo, pero items-start permite que cada uno mida lo que necesita */}
         <PollWidget polls={activePolls} students={userStudents} userRole={userRole} />
         <UpcomingEventsWidget events={upcomingEvents} />
       </div>
