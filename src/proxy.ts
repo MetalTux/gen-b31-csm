@@ -8,7 +8,7 @@ export default function proxy(request: NextRequest) {
   
   // 1. ¡SUPER IMPORTANTE!: Si el usuario ya va hacia el login, déjalo pasar libremente.
   // Esto rompe por completo el bucle infinito de redirecciones.
-  if (pathname === '/login') {
+  if (pathname === '/login'|| pathname.startsWith('/auth/verificar')) {
     return NextResponse.next();
   }
 
