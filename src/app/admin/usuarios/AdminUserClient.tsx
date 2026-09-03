@@ -6,10 +6,11 @@ import { createUser, updateUser, deleteUser, toggleUserAccess } from "@/app/acti
 import { Role, BoardPosition } from "@prisma/client";
 import { 
   Loader2, Shield, User as UserIcon, Mail, ShieldAlert,
-  UserPlus, Edit2, Trash2, X, Ban, UserCheck, Plus, Search 
+  UserPlus, Edit2, Trash2, X, Ban, UserCheck, Plus, Search, Link as LinkIcon 
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import { generateDirectLoginLink } from "@/app/actions/magicLink";
 
 interface SimpleStudent {
   id: string;
@@ -127,6 +128,32 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
         }
       }
     });
+  };
+
+  // --- NUEVA LÓGICA: GENERAR ENLACE MÁGICO CON ALERT MODAL ---
+  const handleCopiarEnlace = async (user: AppUser) => {
+    if (!user.email) {
+      setAlertConfig({ isOpen: true, type: "error", title: "Acción Imposible", message: "Este usuario no tiene un correo electrónico registrado." });
+      return;
+    }
+
+    setProcessingId(`link-${user.id}`);
+    try {
+      const ruta = await generateDirectLoginLink(user.email);
+      const enlaceCompleto = window.location.origin + ruta;
+      await navigator.clipboard.writeText(enlaceCompleto);
+      
+      setAlertConfig({ 
+        isOpen: true, 
+        type: "success", 
+        title: "¡Enlace Copiado!", 
+        message: `El enlace de acceso directo para ${user.name || user.email} se ha copiado al portapapeles. Ya puedes pegarlo en WhatsApp.` 
+      });
+    } catch (error) {
+      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo generar el enlace seguro." });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   return (
@@ -247,9 +274,14 @@ export default function AdminUserClient({ users }: AdminUserClientProps) {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Editar"><Edit2 size={16} /></button>
-                        <button onClick={() => triggerToggleAccess(u)} disabled={processingId !== null} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isActive ? "text-amber-500 hover:bg-amber-50" : "text-emerald-500 hover:bg-emerald-50"}`} title={u.isActive ? "Suspender Acceso" : "Reactivar Cuenta"}>{processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : u.isActive ? <Ban size={16} /> : <UserCheck size={16} />}</button>
-                        <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Eliminar"><Trash2 size={16} /></button>
+                        {/* NUEVO BOTÓN: Enlace de Acceso Directo */}
+                        <button onClick={() => handleCopiarEnlace(u)} disabled={processingId !== null || !u.isActive} className="p-1.5 text-indigo-500 hover:bg-indigo-50 disabled:text-gray-300 disabled:hover:bg-transparent rounded-lg transition-colors cursor-pointer" title="Copiar Enlace de Acceso Directo">
+                          {processingId === `link-${u.id}` ? <Loader2 size={16} className="animate-spin" /> : <LinkIcon size={16} />}
+                        </button>
+                        
+                        <button onClick={() => startEditing(u)} disabled={processingId !== null} className="p-1.5 text-blue-500 hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent rounded-lg transition-colors cursor-pointer" title="Editar"><Edit2 size={16} /></button>
+                        <button onClick={() => triggerToggleAccess(u)} disabled={processingId !== null} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${u.isActive ? "text-amber-500 hover:bg-amber-50" : "text-emerald-500 hover:bg-emerald-50"} disabled:text-gray-300 disabled:hover:bg-transparent`} title={u.isActive ? "Suspender Acceso" : "Reactivar Cuenta"}>{processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : u.isActive ? <Ban size={16} /> : <UserCheck size={16} />}</button>
+                        <button onClick={() => triggerDelete(u)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:text-gray-300 disabled:hover:bg-transparent rounded-lg transition-colors cursor-pointer" title="Eliminar"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>

@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import EmailProvider from "next-auth/providers/email";
 import type { Adapter } from "next-auth/adapters"; 
+import CredentialsProvider from "next-auth/providers/credentials";
 
 const pgAdapter = new PrismaPg({ 
   connectionString: process.env.DATABASE_URL! 
@@ -29,6 +30,41 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM, 
     }),
+    CredentialsProvider({
+      id: "admin-magic-link",
+      name: "Enlace Administrativo",
+      credentials: {
+        token: { label: "Token", type: "text" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null;
+
+        // 1. Buscamos el token en la tabla que ya existe de NextAuth
+        const verificationToken = await prisma.verificationToken.findUnique({ 
+          where: { token: credentials.token } 
+        });
+
+        // 2. Verificamos que exista y no esté vencido
+        if (!verificationToken || verificationToken.expires < new Date()) {
+          return null;
+        }
+
+        // 3. Buscamos al usuario usando el "identifier" (que será su correo)
+        const user = await prisma.user.findUnique({
+          where: { email: verificationToken.identifier }
+        });
+
+        if (!user) return null;
+
+        // 4. Si es válido, ELIMINAMOS el token para que sea de un solo uso
+        await prisma.verificationToken.delete({
+          where: { token: credentials.token }
+        });
+
+        // 5. Devolvemos el usuario para autorizar el inicio de sesión
+        return user;
+      }
+    })
   ],
   // Agregamos los callbacks aquí
   callbacks: {
