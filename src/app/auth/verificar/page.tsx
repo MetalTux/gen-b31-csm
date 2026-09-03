@@ -3,43 +3,41 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
 function VerifyContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get("token");
   
-  // SOLUCIÓN: Si no hay token desde el principio, el estado inicial es "error". 
-  // Así evitamos hacer setStatus() de forma síncrona dentro del useEffect.
   const [status, setStatus] = useState<"loading" | "success" | "error">(token ? "loading" : "error");
 
   useEffect(() => {
-    // Si ya sabemos que no hay token, no hacemos nada más.
     if (!token) return;
 
     const authenticate = async () => {
-      // Usamos el ID de nuestro proveedor personalizado
+      // Intentamos iniciar sesión usando nuestro proveedor mágico
       const result = await signIn("admin-magic-link", {
         token,
-        redirect: false,
+        redirect: false, // Evitamos que NextAuth redirija por su cuenta
       });
 
-      if (result?.error) {
+      // Validamos si la respuesta fue exitosa
+      if (result?.error || !result?.ok) {
         setStatus("error");
       } else {
         setStatus("success");
-        // Redirigimos al muro principal después de mostrar el éxito
+        
+        // SOLUCIÓN: Usamos window.location.href para forzar la recarga 
+        // y asegurar que la cookie viaje al middleware correctamente.
         setTimeout(() => {
-          router.push("/");
-          router.refresh();
+          window.location.href = "/";
         }, 1500);
       }
     };
 
     authenticate();
-  }, [token, router]);
+  }, [token]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -80,7 +78,6 @@ function VerifyContent() {
 
 export default function VerifyPage() {
   return (
-    // Recomendado en Next.js App Router para leer parámetros de URL
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-accent"/></div>}>
       <VerifyContent />
     </Suspense>
