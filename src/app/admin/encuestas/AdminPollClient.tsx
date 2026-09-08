@@ -102,7 +102,7 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // --- LÓGICA PARA EXPORTAR A CSV ---
+  // --- LÓGICA PARA EXPORTAR A CSV (Formato Optimizado) ---
   const handleDownloadCSV = (poll: Poll) => {
     const studentData = new Map<string, {
       studentName: string;
@@ -146,7 +146,8 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
     const headers = ["Alumno (Apellidos, Nombres)", "Nombre Apoderado", "Email Apoderado"];
     
     poll.questions.forEach((q, i) => {
-      headers.push(`Pregunta ${i + 1}: ${q.title}`);
+      // SOLUCIÓN CABECERAS: Nombre de columna simplificado
+      headers.push(`Pregunta ${i + 1}`);
       q.options.forEach(opt => {
         headers.push(opt.text);
       });
@@ -169,7 +170,8 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       ];
 
       poll.questions.forEach(q => {
-        row.push("-"); 
+        // SOLUCIÓN FILAS: Imprimimos el texto de la pregunta en lugar del guion "-"
+        row.push(q.title); 
         
         const comments: string[] = [];
         
@@ -196,7 +198,6 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       rows.push(row);
     });
 
-    // SOLUCIÓN: Cambiamos el join(",") por join(";") para compatibilidad con Excel
     const csvContent = [
       headers.join(";"),
       ...rows.map(r => r.map(field => `"${field.replace(/"/g, '""')}"`).join(";"))
