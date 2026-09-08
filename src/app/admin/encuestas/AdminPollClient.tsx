@@ -102,9 +102,8 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // --- NUEVA LÓGICA PARA EXPORTAR A CSV (1 Fila por Alumno) ---
+  // --- LÓGICA PARA EXPORTAR A CSV ---
   const handleDownloadCSV = (poll: Poll) => {
-    // 1. Agrupamos los datos: 1 registro único por estudiante
     const studentData = new Map<string, {
       studentName: string;
       userName: string;
@@ -117,7 +116,7 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       q.votes.forEach(v => {
         if (!studentData.has(v.student.id)) {
           studentData.set(v.student.id, {
-            studentName: `${v.student.lastName}, ${v.student.firstName}`, // Apellidos, Nombres
+            studentName: `${v.student.lastName}, ${v.student.firstName}`,
             userName: v.user.name || "N/A",
             userEmail: v.user.email || "N/A",
             date: new Date(v.createdAt),
@@ -127,12 +126,10 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
         
         const record = studentData.get(v.student.id)!;
         
-        // Mantenemos la fecha más reciente de votación
         if (new Date(v.createdAt) > record.date) {
           record.date = new Date(v.createdAt);
         }
 
-        // Guardamos la respuesta asociándola al ID de la pregunta y el texto de la opción
         const key = `${q.id}_${v.pollOption.text}`;
         record.responses[key] = {
           quantity: v.quantity,
@@ -146,29 +143,20 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       return;
     }
 
-    // 2. Construimos las cabeceras dinámicas
     const headers = ["Alumno (Apellidos, Nombres)", "Nombre Apoderado", "Email Apoderado"];
     
     poll.questions.forEach((q, i) => {
-      // Columna principal de la pregunta
       headers.push(`Pregunta ${i + 1}: ${q.title}`);
-      
-      // Columnas para cada opción (1.1, 1.2, etc.)
       q.options.forEach(opt => {
         headers.push(opt.text);
       });
-      
-      // Columna para textos "Otros" si la pregunta lo permite
       if (q.options.some(o => o.isCustomText)) {
         headers.push(`Comentarios P${i + 1}`);
       }
     });
     headers.push("Fecha Votación");
 
-    // 3. Llenamos las filas
     const rows: string[][] = [];
-    
-    // Convertimos el mapa en arreglo y lo ordenamos alfabéticamente por apellido
     const sortedStudents = Array.from(studentData.values()).sort((a, b) => 
       a.studentName.localeCompare(b.studentName)
     );
@@ -181,30 +169,24 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       ];
 
       poll.questions.forEach(q => {
-        // En la columna título de la pregunta, dejamos un separador visual
         row.push("-"); 
         
         const comments: string[] = [];
         
-        // Revisamos opción por opción si el alumno la eligió
         q.options.forEach(opt => {
           const key = `${q.id}_${opt.text}`;
           const response = record.responses[key];
           
           if (response) {
-            // Si la eligió, ponemos la cantidad (1 para múltiple/única, o el N° para cantidad)
             row.push(response.quantity.toString());
-            // Guardamos el texto si escribió algo
             if (response.customText) {
               comments.push(`${opt.text}: ${response.customText}`);
             }
           } else {
-            // Si no la eligió, ponemos 0
             row.push("0");
           }
         });
 
-        // Agregamos la celda de comentarios al final del bloque de esta pregunta
         if (q.options.some(o => o.isCustomText)) {
           row.push(comments.join(" | "));
         }
@@ -214,10 +196,10 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
       rows.push(row);
     });
 
-    // 4. Formateamos y descargamos
+    // SOLUCIÓN: Cambiamos el join(",") por join(";") para compatibilidad con Excel
     const csvContent = [
-      headers.join(","),
-      ...rows.map(r => r.map(field => `"${field.replace(/"/g, '""')}"`).join(","))
+      headers.join(";"),
+      ...rows.map(r => r.map(field => `"${field.replace(/"/g, '""')}"`).join(";"))
     ].join("\n");
 
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
