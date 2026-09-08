@@ -59,7 +59,6 @@ interface Poll {
 interface OptionForm { id: string | number; text: string; isCustomText: boolean; }
 interface QuestionForm { id: string | number; title: string; type: QuestionType; maxSelections?: number | null; maxTotalQuantity?: number | null; options: OptionForm[]; }
 
-// Añadimos allStudents a las propiedades del componente
 export default function AdminPollClient({ polls, allStudents }: { polls: Poll[], allStudents: SimpleStudent[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -103,24 +102,124 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // --- LÓGICA PARA EXPORTAR A CSV ---
+  // --- NUEVA LÓGICA PARA EXPORTAR A CSV (1 Fila por Alumno) ---
   const handleDownloadCSV = (poll: Poll) => {
-    const headers = ["Alumno", "Apoderado", "Correo", "Pregunta / Sección", "Respuesta Elegida", "Cantidad", "Comentario / Otros", "Fecha de Voto"];
-    const rows: string[][] = [];
-    let totalVotes = 0;
+    // 1. Agrupamos los datos: 1 registro único por estudiante
+    const studentData = new Map<string, {
+      studentName: string;
+      userName: string;
+      userEmail: string;
+      date: Date;
+      responses: Record<string, { quantity: number, customText: string | null }>;
+    }>();
+
     poll.questions.forEach(q => {
       q.votes.forEach(v => {
-        totalVotes++;
-        rows.push([`${v.student.firstName} ${v.student.lastName}`, v.user.name || "N/A", v.user.email || "N/A", q.title, v.pollOption.text, v.quantity.toString(), v.customText || "", new Date(v.createdAt).toLocaleString("es-CL")]);
+        if (!studentData.has(v.student.id)) {
+          studentData.set(v.student.id, {
+            studentName: `${v.student.lastName}, ${v.student.firstName}`, // Apellidos, Nombres
+            userName: v.user.name || "N/A",
+            userEmail: v.user.email || "N/A",
+            date: new Date(v.createdAt),
+            responses: {}
+          });
+        }
+        
+        const record = studentData.get(v.student.id)!;
+        
+        // Mantenemos la fecha más reciente de votación
+        if (new Date(v.createdAt) > record.date) {
+          record.date = new Date(v.createdAt);
+        }
+
+        // Guardamos la respuesta asociándola al ID de la pregunta y el texto de la opción
+        const key = `${q.id}_${v.pollOption.text}`;
+        record.responses[key] = {
+          quantity: v.quantity,
+          customText: v.customText
+        };
       });
     });
 
-    if (totalVotes === 0) {
+    if (studentData.size === 0) {
       setAlertConfig({ isOpen: true, type: "error", title: "Sin datos", message: "Esta encuesta aún no tiene respuestas para descargar." });
       return;
     }
 
-    const csvContent = [headers.join(","), ...rows.map(row => row.map(field => `"${field.replace(/"/g, '""')}"`).join(","))].join("\n");
+    // 2. Construimos las cabeceras dinámicas
+    const headers = ["Alumno (Apellidos, Nombres)", "Nombre Apoderado", "Email Apoderado"];
+    
+    poll.questions.forEach((q, i) => {
+      // Columna principal de la pregunta
+      headers.push(`Pregunta ${i + 1}: ${q.title}`);
+      
+      // Columnas para cada opción (1.1, 1.2, etc.)
+      q.options.forEach(opt => {
+        headers.push(opt.text);
+      });
+      
+      // Columna para textos "Otros" si la pregunta lo permite
+      if (q.options.some(o => o.isCustomText)) {
+        headers.push(`Comentarios P${i + 1}`);
+      }
+    });
+    headers.push("Fecha Votación");
+
+    // 3. Llenamos las filas
+    const rows: string[][] = [];
+    
+    // Convertimos el mapa en arreglo y lo ordenamos alfabéticamente por apellido
+    const sortedStudents = Array.from(studentData.values()).sort((a, b) => 
+      a.studentName.localeCompare(b.studentName)
+    );
+
+    sortedStudents.forEach(record => {
+      const row = [
+        record.studentName,
+        record.userName,
+        record.userEmail
+      ];
+
+      poll.questions.forEach(q => {
+        // En la columna título de la pregunta, dejamos un separador visual
+        row.push("-"); 
+        
+        const comments: string[] = [];
+        
+        // Revisamos opción por opción si el alumno la eligió
+        q.options.forEach(opt => {
+          const key = `${q.id}_${opt.text}`;
+          const response = record.responses[key];
+          
+          if (response) {
+            // Si la eligió, ponemos la cantidad (1 para múltiple/única, o el N° para cantidad)
+            row.push(response.quantity.toString());
+            // Guardamos el texto si escribió algo
+            if (response.customText) {
+              comments.push(`${opt.text}: ${response.customText}`);
+            }
+          } else {
+            // Si no la eligió, ponemos 0
+            row.push("0");
+          }
+        });
+
+        // Agregamos la celda de comentarios al final del bloque de esta pregunta
+        if (q.options.some(o => o.isCustomText)) {
+          row.push(comments.join(" | "));
+        }
+      });
+
+      row.push(record.date.toLocaleString("es-CL"));
+      rows.push(row);
+    });
+
+    // 4. Formateamos y descargamos
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(field => `"${field.replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -252,12 +351,10 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-400 italic text-sm"><BarChart2 size={32} className="mx-auto mb-3 text-gray-300" /> No hay formularios publicados.</div>
         ) : (
           polls.map(poll => {
-            // Extraemos los IDs únicos de los alumnos que votaron en esta encuesta
             const uniqueStudents = new Set<string>();
             poll.questions.forEach(q => q.votes.forEach(v => uniqueStudents.add(v.student.id)));
             const totalUniqueVoters = uniqueStudents.size;
 
-            // Calculamos quiénes NO han votado cruzando con allStudents
             const missingStudents = allStudents.filter(student => !uniqueStudents.has(student.id));
 
             const isExpired = poll.expiresAt && new Date() > new Date(poll.expiresAt);
@@ -289,7 +386,7 @@ export default function AdminPollClient({ polls, allStudents }: { polls: Poll[],
 
                   {/* ZONA DE BOTONES (INCLUYE DESCARGA CSV) */}
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => handleDownloadCSV(poll)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors" title="Descargar Resultados en CSV (Excel)">
+                    <button onClick={() => handleDownloadCSV(poll)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors" title="Descargar Resultados en Excel (CSV)">
                       <Download size={16} />
                     </button>
                     <button onClick={() => triggerToggleStatus(poll)} disabled={processingId === poll.id} className="p-2 text-gray-400 hover:text-brand-navy hover:bg-gray-100 rounded-xl cursor-pointer">
