@@ -8,17 +8,23 @@ import {
 } from "@/app/actions/poll";
 import { 
   Loader2, HelpCircle, Plus, Trash2, Lock, Unlock, 
-  Clock, Users, BarChart2, AlertCircle, X, Share2, Pencil, Type
+  Clock, Users, BarChart2, AlertCircle, X, Pencil, Type, Download, Clock3
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
 // --- INTERFACES ACTUALIZADAS ---
+interface SimpleStudent {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface PollVoteDetail {
   id: string;
   quantity: number;
   customText: string | null;
-  student: { id: string; firstName: string; lastName: string };
+  student: SimpleStudent;
   user: { name: string | null; email: string | null };
   pollOption: { text: string };
   createdAt: Date;
@@ -50,11 +56,11 @@ interface Poll {
   questions: PollQuestion[];
 }
 
-// Para el Constructor (ID puede ser numérico para nuevos, o string para los que vienen de BD)
 interface OptionForm { id: string | number; text: string; isCustomText: boolean; }
 interface QuestionForm { id: string | number; title: string; type: QuestionType; maxSelections?: number | null; maxTotalQuantity?: number | null; options: OptionForm[]; }
 
-export default function AdminPollClient({ polls }: { polls: Poll[] }) {
+// Añadimos allStudents a las propiedades del componente
+export default function AdminPollClient({ polls, allStudents }: { polls: Poll[], allStudents: SimpleStudent[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [expandedPollId, setExpandedPollId] = useState<string | null>(null);
@@ -74,67 +80,56 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
 
   // --- LÓGICA DEL CONSTRUCTOR ---
   const resetForm = () => {
-    setEditingPollId(null);
-    setTitle("");
-    setDescription("");
-    setExpiresAt("");
+    setEditingPollId(null); setTitle(""); setDescription(""); setExpiresAt("");
     setQuestions([{ id: 1, title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
   };
 
-  const addQuestion = () => {
-    setQuestions([...questions, { id: Date.now(), title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
-  };
-  
-  const removeQuestion = (qId: string | number) => {
-    if (questions.length > 1) setQuestions(questions.filter(q => q.id !== qId));
-  };
+  const addQuestion = () => setQuestions([...questions, { id: Date.now(), title: "", type: "SINGLE_CHOICE", options: [{ id: 1, text: "", isCustomText: false }, { id: 2, text: "", isCustomText: false }] }]);
+  const removeQuestion = (qId: string | number) => { if (questions.length > 1) setQuestions(questions.filter(q => q.id !== qId)); };
+  const updateQuestion = <K extends keyof QuestionForm>(qId: string | number, field: K, value: QuestionForm[K]) => setQuestions(questions.map(q => q.id === qId ? { ...q, [field]: value } : q));
+  const addOption = (qId: string | number) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: [...q.options, { id: Date.now(), text: "", isCustomText: false }] } : q));
+  const updateOption = <K extends keyof OptionForm>(qId: string | number, optId: string | number, field: K, value: OptionForm[K]) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.map(o => o.id === optId ? { ...o, [field]: value } : o) } : q));
+  const removeOption = (qId: string | number, optId: string | number) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.filter(o => o.id !== optId) } : q));
 
-  const updateQuestion = <K extends keyof QuestionForm>(qId: string | number, field: K, value: QuestionForm[K]) => {
-    setQuestions(questions.map(q => q.id === qId ? { ...q, [field]: value } : q));
-  };
-
-  const addOption = (qId: string | number) => {
-    setQuestions(questions.map(q => q.id === qId ? { ...q, options: [...q.options, { id: Date.now(), text: "", isCustomText: false }] } : q));
-  };
-
-  const updateOption = <K extends keyof OptionForm>(qId: string | number, optId: string | number, field: K, value: OptionForm[K]) => {
-    setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.map(o => o.id === optId ? { ...o, [field]: value } : o) } : q));
-  };
-
-  const removeOption = (qId: string | number, optId: string | number) => {
-    setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options.filter(o => o.id !== optId) } : q));
-  };
-
-  // Carga la encuesta existente en el constructor para editar
   const openEditMode = (poll: Poll) => {
-    setEditingPollId(poll.id);
-    setTitle(poll.title);
-    setDescription(poll.description || "");
-    
+    setEditingPollId(poll.id); setTitle(poll.title); setDescription(poll.description || "");
     if (poll.expiresAt) {
       const date = new Date(poll.expiresAt);
       date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
       setExpiresAt(date.toISOString().slice(0, 16));
-    } else {
-      setExpiresAt("");
+    } else { setExpiresAt(""); }
+    setQuestions(poll.questions.map(q => ({ id: q.id, title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity, options: q.options.map(o => ({ id: o.id, text: o.text, isCustomText: o.isCustomText })) })));
+    setIsMobileFormOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // --- LÓGICA PARA EXPORTAR A CSV ---
+  const handleDownloadCSV = (poll: Poll) => {
+    const headers = ["Alumno", "Apoderado", "Correo", "Pregunta / Sección", "Respuesta Elegida", "Cantidad", "Comentario / Otros", "Fecha de Voto"];
+    const rows: string[][] = [];
+    let totalVotes = 0;
+    poll.questions.forEach(q => {
+      q.votes.forEach(v => {
+        totalVotes++;
+        rows.push([`${v.student.firstName} ${v.student.lastName}`, v.user.name || "N/A", v.user.email || "N/A", q.title, v.pollOption.text, v.quantity.toString(), v.customText || "", new Date(v.createdAt).toLocaleString("es-CL")]);
+      });
+    });
+
+    if (totalVotes === 0) {
+      setAlertConfig({ isOpen: true, type: "error", title: "Sin datos", message: "Esta encuesta aún no tiene respuestas para descargar." });
+      return;
     }
 
-    setQuestions(poll.questions.map(q => ({
-      id: q.id,
-      title: q.title,
-      type: q.type,
-      maxSelections: q.maxSelections,
-      maxTotalQuantity: q.maxTotalQuantity,
-      options: q.options.map(o => ({
-        id: o.id,
-        text: o.text,
-        isCustomText: o.isCustomText
-      }))
-    })));
-
-    setIsMobileFormOpen(true);
-    // Hacemos scroll suave hacia arriba para que el usuario vea el formulario cargado
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const csvContent = [headers.join(","), ...rows.map(row => row.map(field => `"${field.replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeTitle = poll.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.href = url;
+    link.setAttribute("download", `resultados_${safeTitle}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // --- ACCIONES CON LA BASE DE DATOS ---
@@ -142,7 +137,6 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     e.preventDefault();
     if (!title || questions.length === 0 || isSubmitting) return;
 
-    // Validación
     for (const q of questions) {
       if (!q.title.trim()) return setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Todas las preguntas deben tener un título." });
       if (q.options.length < 2) return setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Cada pregunta debe tener al menos 2 opciones." });
@@ -154,77 +148,29 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
     setIsSubmitting(true);
     try {
       const dateParsed = expiresAt ? new Date(expiresAt) : null;
-      
       if (editingPollId) {
-        // Estamos ACTUALIZANDO
-        await updatePoll({
-          pollId: editingPollId,
-          title,
-          description,
-          expiresAt: dateParsed,
-          questions: questions.map(q => ({
-            id: q.id, title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity,
-            options: q.options.map(o => ({ id: o.id, text: o.text, isCustomText: o.isCustomText }))
-          }))
-        });
+        await updatePoll({ pollId: editingPollId, title, description, expiresAt: dateParsed, questions: questions.map(q => ({ id: q.id, title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity, options: q.options.map(o => ({ id: o.id, text: o.text, isCustomText: o.isCustomText })) })) });
         setAlertConfig({ isOpen: true, type: "success", title: "Encuesta Actualizada", message: "Los cambios de estructura se han guardado con éxito." });
       } else {
-        // Estamos CREANDO
-        await createPoll({ 
-          title, description, expiresAt: dateParsed, 
-          questions: questions.map(q => ({
-            title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity,
-            options: q.options.map(o => ({ text: o.text, isCustomText: o.isCustomText }))
-          })) 
-        });
+        await createPoll({ title, description, expiresAt: dateParsed, questions: questions.map(q => ({ title: q.title, type: q.type, maxSelections: q.maxSelections, maxTotalQuantity: q.maxTotalQuantity, options: q.options.map(o => ({ text: o.text, isCustomText: o.isCustomText })) })) });
         setAlertConfig({ isOpen: true, type: "success", title: "Formulario Creado", message: "La consulta ya está disponible." });
       }
-      
-      resetForm();
-      setIsMobileFormOpen(false);
+      resetForm(); setIsMobileFormOpen(false);
     } catch (error) {
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error al guardar." });
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
   const triggerToggleStatus = (poll: Poll) => {
-    setConfirmConfig({
-      isOpen: true, title: poll.isActive ? "¿Cerrar Votación?" : "¿Reabrir Votación?",
-      message: poll.isActive ? "Ya no se recibirán nuevos votos." : "Se habilitará nuevamente la recepción de votos.",
-      onConfirm: async () => {
-        setProcessingId(poll.id);
-        try { await togglePollStatus(poll.id, !poll.isActive); setConfirmConfig(prev => ({ ...prev, isOpen: false })); }
-        catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo cambiar el estado." }); }
-        finally { setProcessingId(null); }
-      }
-    });
+    setConfirmConfig({ isOpen: true, title: poll.isActive ? "¿Cerrar Votación?" : "¿Reabrir Votación?", message: poll.isActive ? "Ya no se recibirán nuevos votos." : "Se habilitará nuevamente la recepción de votos.", onConfirm: async () => { setProcessingId(poll.id); try { await togglePollStatus(poll.id, !poll.isActive); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo cambiar el estado." }); } finally { setProcessingId(null); } } });
   };
 
   const triggerDelete = (pollId: string) => {
-    setConfirmConfig({
-      isOpen: true, title: "¿Eliminar Formulario?", message: "Acción irreversible. Borrará todo el historial de respuestas. ¿Seguro?",
-      onConfirm: async () => {
-        setProcessingId(pollId);
-        try { await deletePoll(pollId); setConfirmConfig(prev => ({ ...prev, isOpen: false })); }
-        catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo eliminar." }); }
-        finally { setProcessingId(null); }
-      }
-    });
+    setConfirmConfig({ isOpen: true, title: "¿Eliminar Formulario?", message: "Acción irreversible. Borrará todo el historial de respuestas. ¿Seguro?", onConfirm: async () => { setProcessingId(pollId); try { await deletePoll(pollId); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo eliminar." }); } finally { setProcessingId(null); } } });
   };
 
   const triggerAnnulVote = (pollId: string, studentId: string, studentName: string) => {
-    setConfirmConfig({
-      isOpen: true, title: "Anular Respuesta del Alumno",
-      message: `¿Estás seguro de borrar las respuestas de ${studentName}? El apoderado podrá volver a enviar el formulario.`,
-      onConfirm: async () => {
-        setProcessingId(`${pollId}-${studentId}`);
-        try { await deleteStudentVotes(pollId, studentId); setConfirmConfig(prev => ({ ...prev, isOpen: false })); }
-        catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo anular." }); }
-        finally { setProcessingId(null); }
-      }
-    });
+    setConfirmConfig({ isOpen: true, title: "Anular Respuesta del Alumno", message: `¿Estás seguro de borrar las respuestas de ${studentName}? El apoderado podrá volver a enviar el formulario.`, onConfirm: async () => { setProcessingId(`${pollId}-${studentId}`); try { await deleteStudentVotes(pollId, studentId); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo anular." }); } finally { setProcessingId(null); } } });
   };
 
   return (
@@ -253,18 +199,9 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Título del Formulario</label>
-              <input type="text" value={title} onChange={e => setTitle(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Descripción</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:ring-2 focus:ring-brand-accent text-gray-700 resize-none" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5"><Clock size={13} className="text-brand-accent"/> Vencimiento</label>
-              <input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 cursor-pointer bg-white" />
-            </div>
+            <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Título del Formulario</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:ring-2 focus:ring-brand-accent text-gray-700 font-bold" /></div>
+            <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase">Descripción</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:ring-2 focus:ring-brand-accent text-gray-700 resize-none" /></div>
+            <div className="space-y-1"><label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5"><Clock size={13} className="text-brand-accent"/> Vencimiento</label><input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 cursor-pointer bg-white" /></div>
 
             {/* SECCIONES (PREGUNTAS) */}
             <div className="space-y-6 border-t border-gray-100 pt-4">
@@ -275,37 +212,12 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
 
               {questions.map((q, qIndex) => (
                 <div key={q.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 relative">
-                  {questions.length > 1 && (
-                    <button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500 cursor-pointer p-1"><Trash2 size={16}/></button>
-                  )}
+                  {questions.length > 1 && (<button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500 cursor-pointer p-1"><Trash2 size={16}/></button>)}
                   
-                  <div className="space-y-1 pr-6">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Pregunta {qIndex + 1}</label>
-                    <input type="text" placeholder="Ej: Indique el tipo de empanada" value={q.title} onChange={e => updateQuestion(q.id, 'title', e.target.value)} required className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-300" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Tipo de Respuesta</label>
-                    <select value={q.type} onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white cursor-pointer">
-                      <option value="SINGLE_CHOICE">Única (Solo 1 opción)</option>
-                      <option value="MULTIPLE_CHOICE">Múltiple (Elegir varias opciones)</option>
-                      <option value="QUANTITY">Cantidades (Repartir por números)</option>
-                    </select>
-                  </div>
-
-                  {q.type === "MULTIPLE_CHOICE" && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase">Máximo de Opciones (Opcional)</label>
-                      <input type="number" min="1" placeholder="Sin límite" value={q.maxSelections || ''} onChange={e => updateQuestion(q.id, 'maxSelections', e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300" />
-                    </div>
-                  )}
-
-                  {q.type === "QUANTITY" && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase">Cantidad Total Máxima a elegir</label>
-                      <input type="number" min="1" placeholder="Ej: 3" value={q.maxTotalQuantity || ''} onChange={e => updateQuestion(q.id, 'maxTotalQuantity', e.target.value ? parseInt(e.target.value) : null)} required className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-amber-50" />
-                    </div>
-                  )}
+                  <div className="space-y-1 pr-6"><label className="text-[10px] font-bold text-gray-500 uppercase">Pregunta {qIndex + 1}</label><input type="text" placeholder="Ej: Indique el tipo de empanada" value={q.title} onChange={e => updateQuestion(q.id, 'title', e.target.value)} required className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-300" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-gray-500 uppercase">Tipo de Respuesta</label><select value={q.type} onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white cursor-pointer"><option value="SINGLE_CHOICE">Única (Solo 1 opción)</option><option value="MULTIPLE_CHOICE">Múltiple (Elegir varias opciones)</option><option value="QUANTITY">Cantidades (Repartir por números)</option></select></div>
+                  {q.type === "MULTIPLE_CHOICE" && (<div className="space-y-1"><label className="text-[10px] font-bold text-gray-500 uppercase">Máximo de Opciones (Opcional)</label><input type="number" min="1" placeholder="Sin límite" value={q.maxSelections || ''} onChange={e => updateQuestion(q.id, 'maxSelections', e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300" /></div>)}
+                  {q.type === "QUANTITY" && (<div className="space-y-1"><label className="text-[10px] font-bold text-gray-500 uppercase">Cantidad Total Máxima a elegir</label><input type="number" min="1" placeholder="Ej: 3" value={q.maxTotalQuantity || ''} onChange={e => updateQuestion(q.id, 'maxTotalQuantity', e.target.value ? parseInt(e.target.value) : null)} required className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-amber-50" /></div>)}
 
                   <div className="space-y-2 pt-2">
                     <label className="text-[10px] font-bold text-gray-500 uppercase block">Opciones</label>
@@ -313,9 +225,7 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                       <div key={opt.id} className="flex flex-col gap-1 bg-white p-2 border border-gray-200 rounded-lg">
                         <div className="flex gap-2">
                           <input type="text" placeholder={`Opción ${oIndex + 1}`} value={opt.text} onChange={e => updateOption(q.id, opt.id, 'text', e.target.value)} required className="flex-1 px-2 py-1 text-xs rounded-md border border-gray-300" />
-                          {q.options.length > 2 && (
-                            <button type="button" onClick={() => removeOption(q.id, opt.id)} className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"><X size={14}/></button>
-                          )}
+                          {q.options.length > 2 && (<button type="button" onClick={() => removeOption(q.id, opt.id)} className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"><X size={14}/></button>)}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
                           <input type="checkbox" id={`custom-${opt.id}`} checked={opt.isCustomText} onChange={e => updateOption(q.id, opt.id, 'isCustomText', e.target.checked)} className="rounded border-gray-300 cursor-pointer" />
@@ -342,9 +252,13 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-400 italic text-sm"><BarChart2 size={32} className="mx-auto mb-3 text-gray-300" /> No hay formularios publicados.</div>
         ) : (
           polls.map(poll => {
-            const uniqueStudents = new Set();
+            // Extraemos los IDs únicos de los alumnos que votaron en esta encuesta
+            const uniqueStudents = new Set<string>();
             poll.questions.forEach(q => q.votes.forEach(v => uniqueStudents.add(v.student.id)));
             const totalUniqueVoters = uniqueStudents.size;
+
+            // Calculamos quiénes NO han votado cruzando con allStudents
+            const missingStudents = allStudents.filter(student => !uniqueStudents.has(student.id));
 
             const isExpired = poll.expiresAt && new Date() > new Date(poll.expiresAt);
             const effectivelyActive = poll.isActive && !isExpired;
@@ -373,7 +287,11 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                     )}
                   </div>
 
+                  {/* ZONA DE BOTONES (INCLUYE DESCARGA CSV) */}
                   <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => handleDownloadCSV(poll)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors" title="Descargar Resultados en CSV (Excel)">
+                      <Download size={16} />
+                    </button>
                     <button onClick={() => triggerToggleStatus(poll)} disabled={processingId === poll.id} className="p-2 text-gray-400 hover:text-brand-navy hover:bg-gray-100 rounded-xl cursor-pointer">
                       {processingId === poll.id ? <Loader2 size={16} className="animate-spin" /> : effectivelyActive ? <Lock size={16} /> : <Unlock size={16} />}
                     </button>
@@ -404,11 +322,7 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                                 <div className="flex justify-between text-xs font-bold mb-1.5 px-1">
                                   <span className="text-gray-700 flex items-center gap-1">
                                     {opt.text} 
-                                    {opt.isCustomText && (
-                                      <span title="Incluye textos personalizados">
-                                        <Type size={12} className="text-gray-400" />
-                                      </span>
-                                    )}
+                                    {opt.isCustomText && (<span title="Incluye textos personalizados"><Type size={12} className="text-gray-400" /></span>)}
                                   </span>
                                   <span className="text-brand-navy">{optionQuantity} ({percentage}%)</span>
                                 </div>
@@ -421,47 +335,78 @@ export default function AdminPollClient({ polls }: { polls: Poll[] }) {
                     );
                   })}
 
-                  {totalUniqueVoters > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <button onClick={() => setExpandedPollId(expandedPollId === poll.id ? null : poll.id)} className="text-xs font-bold text-blue-600 hover:underline w-full text-center py-1 cursor-pointer">
-                        {expandedPollId === poll.id ? "Ocultar detalle de respuestas" : "Ver detalle de quién respondió"}
-                      </button>
-                      
-                      {expandedPollId === poll.id && (
-                        <div className="mt-3 max-h-60 overflow-y-auto bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-200">
-                          {Array.from(uniqueStudents).map(studentId => {
-                            const studentVotes = poll.questions.flatMap(q => q.votes.filter(v => v.student.id === studentId));
-                            const studentData = studentVotes[0].student;
-                            const userData = studentVotes[0].user;
-                            const isProcessing = processingId === `${poll.id}-${studentId}`;
-
-                            return (
-                              <div key={studentId as string} className="p-3 text-xs flex justify-between items-start group/vote">
-                                <div className="space-y-1 flex-1">
-                                  <div>
-                                    <span className="font-bold text-brand-navy block">🎓 {studentData.firstName} {studentData.lastName}</span>
-                                    <span className="text-gray-400 text-[10px]">Respuestas de: {userData.name || userData.email}</span>
-                                  </div>
-                                  <div className="bg-white border border-gray-200 p-2 rounded-lg space-y-1">
-                                    {studentVotes.map(v => (
-                                      <div key={v.id} className="flex items-start gap-1">
-                                        <span className="text-brand-accent font-bold">[{v.quantity}]</span>
-                                        <span className="font-medium text-gray-700">{v.pollOption.text}</span>
-                                        {v.customText && <span className="text-gray-500 italic ml-1">&quot;{v.customText}&quot;</span>}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                                <button onClick={() => triggerAnnulVote(poll.id, studentData.id, `${studentData.firstName}`)} disabled={isProcessing} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-md transition-all cursor-pointer opacity-100 lg:opacity-0 group-hover/vote:opacity-100 shrink-0 ml-2">
-                                  {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                                </button>
-                              </div>
-                            );
-                          })}
+                  {/* ZONA DE DETALLE Y PENDIENTES */}
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <button onClick={() => setExpandedPollId(expandedPollId === poll.id ? null : poll.id)} className="text-xs font-bold text-blue-600 hover:underline w-full text-center py-1 cursor-pointer">
+                      {expandedPollId === poll.id ? "Ocultar detalle de respuestas" : "Ver detalle de respuestas y pendientes"}
+                    </button>
+                    
+                    {expandedPollId === poll.id && (
+                      <div className="mt-4 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-inner">
+                        
+                        {/* 1. SECCIÓN DE ALUMNOS QUE RESPONDIERON */}
+                        <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 font-bold text-xs text-brand-navy uppercase tracking-wide">
+                          Respondieron ({uniqueStudents.size})
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
+                          {totalUniqueVoters === 0 ? (
+                            <div className="p-4 text-xs text-gray-400 italic text-center">Nadie ha respondido aún.</div>
+                          ) : (
+                            Array.from(uniqueStudents).map(studentId => {
+                              const studentVotes = poll.questions.flatMap(q => q.votes.filter(v => v.student.id === studentId));
+                              const studentData = studentVotes[0].student;
+                              const userData = studentVotes[0].user;
+                              const isProcessing = processingId === `${poll.id}-${studentId}`;
+
+                              return (
+                                <div key={studentId as string} className="p-3 px-4 text-xs flex justify-between items-start group/vote">
+                                  <div className="space-y-1 flex-1">
+                                    <div>
+                                      <span className="font-bold text-brand-navy block">🎓 {studentData.firstName} {studentData.lastName}</span>
+                                      <span className="text-gray-400 text-[10px]">Respuestas de: {userData.name || userData.email}</span>
+                                    </div>
+                                    <div className="bg-white border border-gray-100 p-2 rounded-lg space-y-1 inline-block mt-1">
+                                      {studentVotes.map(v => (
+                                        <div key={v.id} className="flex items-start gap-1">
+                                          <span className="text-brand-accent font-bold">[{v.quantity}]</span>
+                                          <span className="font-medium text-gray-700">{v.pollOption.text}</span>
+                                          {v.customText && <span className="text-gray-500 italic ml-1">&quot;{v.customText}&quot;</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <button onClick={() => triggerAnnulVote(poll.id, studentData.id, `${studentData.firstName}`)} disabled={isProcessing} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-md transition-all cursor-pointer opacity-100 lg:opacity-0 group-hover/vote:opacity-100 shrink-0 ml-2" title="Anular voto">
+                                    {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* 2. SECCIÓN DE ALUMNOS PENDIENTES */}
+                        <div className="bg-amber-50/60 px-4 py-2.5 border-y border-amber-100 font-bold text-xs text-amber-700 uppercase tracking-wide">
+                          Faltan por responder ({missingStudents.length})
+                        </div>
+                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-50 bg-white">
+                          {missingStudents.length === 0 ? (
+                            <div className="p-4 text-xs text-emerald-600 font-medium text-center italic">
+                              ¡Todos los alumnos han respondido! 🎉
+                            </div>
+                          ) : (
+                            missingStudents.map(student => (
+                              <div key={student.id} className="p-3 px-4 text-xs flex items-center gap-2 text-gray-600">
+                                <Clock3 size={14} className="text-amber-400" />
+                                🎓 <span className="font-medium">{student.firstName} {student.lastName}</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </div>
             );

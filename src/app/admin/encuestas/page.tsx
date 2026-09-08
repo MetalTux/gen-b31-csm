@@ -27,7 +27,7 @@ export default async function AdminEncuestasPage() {
     );
   }
 
-  // NUEVA ESTRUCTURA DE CONSULTA: Traemos las preguntas con sus opciones y los votos asociados
+  // 1. Traemos las encuestas con sus preguntas y votos
   const polls = await prisma.poll.findMany({
     where: { schoolYearId: activeYear.id },
     orderBy: { createdAt: "desc" },
@@ -51,6 +51,13 @@ export default async function AdminEncuestasPage() {
     }
   });
 
+  // 2. NUEVO: Traemos todos los alumnos activos del curso para hacer la comparación
+  const allStudents = await prisma.student.findMany({
+    where: { isActive: true },
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }]
+  });
+
   return (
     <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
       <div>
@@ -60,8 +67,8 @@ export default async function AdminEncuestasPage() {
         </p>
       </div>
 
-      {/* Pasamos los datos estructurados al cliente */}
-      <AdminPollClient polls={polls} />
+      {/* Pasamos ambas listas al cliente */}
+      <AdminPollClient polls={polls} allStudents={allStudents} />
     </main>
   );
 }
