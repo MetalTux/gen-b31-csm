@@ -15,13 +15,21 @@ export default async function AdminIngresosPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/login");
 
-  // Validación estricta: Solo ADMIN
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (user?.role !== "ADMIN") redirect("/");
 
+  // CORRECCIÓN: Eliminamos el orderBy inválido para que Prisma resuelva los tipos correctamente
   const activeYear = await prisma.schoolYear.findFirst({ 
     where: { isActive: true },
-    include: { extraFees: true }
+    include: { 
+      extraFees: {
+        include: {
+          assignedStudents: {
+            select: { id: true, firstName: true, lastName: true }
+          }
+        }
+      } 
+    }
   });
 
   if (!activeYear) {
@@ -32,24 +40,21 @@ export default async function AdminIngresosPage() {
     );
   }
 
-  // Traemos TODOS los alumnos del colegio/curso para el selector de pagos en efectivo
   const allStudents = await prisma.student.findMany({
     where: { isActive: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
   });
 
-  // Traemos TODOS los pagos del año activo
   const allPayments = await prisma.payment.findMany({
     where: { schoolYearId: activeYear.id },
     include: {
       student: true,
-      user: true, // Para saber qué apoderado lo rindió
+      user: true, 
       extraFee: true,
     },
     orderBy: { date: "desc" }
   });
 
-  // Filtramos para facilitar el trabajo del componente cliente
   const pendingPayments = allPayments.filter(p => !p.isVerified);
   const verifiedPayments = allPayments.filter(p => p.isVerified);
 

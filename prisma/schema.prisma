@@ -81,7 +81,7 @@ enum EventCategory {
   OTRO          // Cualquier otro evento misceláneo
 }
 
-// --- NUEVO: ENUM PARA ENCUESTAS DINÁMICAS ---
+// --- ENUM PARA ENCUESTAS DINÁMICAS ---
 enum QuestionType {
   SINGLE_CHOICE   // Ej: Elija solo un menú
   MULTIPLE_CHOICE // Ej: Elija las actividades en las que participará
@@ -90,23 +90,27 @@ enum QuestionType {
 
 // Configuración del Año Escolar
 model SchoolYear {
-  id             String      @id @default(cuid())
-  year           Int         @unique // Ej: 2026
-  className      String      // Ej: "7 Básico B" o "8 Básico B"
-  isActive       Boolean     @default(false) // Solo un año debería estar activo a la vez
-  initialBalance Float       @default(0)     // Saldo a favor/contra del año anterior
-  quotaAmount    Float       // Monto de la cuota regular
-  totalQuotas    Int         // Cantidad de cuotas en el año (ej: 10)
-  teacherName    String?     // Nombre del profesor(a) jefe
+  id                String     @id @default(cuid())
+  year              Int        @unique // Ej: 2026
+  className         String     // Ej: "7 Básico B" o "8 Básico B"
+  isActive          Boolean    @default(false) // Solo un año debería estar activo a la vez
+  
+  // --- NUEVO: Cantidad mínima de cuotas base requeridas para este año ---
+  minimumBaseQuotas Int        @default(10)
+  
+  initialBalance    Float      @default(0)     // Saldo a favor/contra del año anterior
+  quotaAmount       Float      // Monto de la cuota regular
+  totalQuotas       Int        // Cantidad total de cuotas en el año (ej: 10)
+  teacherName       String?    // Nombre del profesor(a) jefe
   
   // Relaciones históricas
-  payments       Payment[]
-  expenses       Expense[]
-  activities     Activity[]
-  extraFees      ExtraFee[]
-  polls          Poll[]
-  inquiries      Inquiry[]   
-  events         Event[]     // Eventos del año escolar
+  payments          Payment[]
+  expenses          Expense[]
+  activities        Activity[]
+  extraFees         ExtraFee[]
+  polls             Poll[]
+  inquiries         Inquiry[]   
+  events            Event[]     // Eventos del año escolar
 }
 
 // Tabla de Usuarios
@@ -121,6 +125,10 @@ model User {
   
   role             Role              @default(USER) 
   boardPosition    BoardPosition? 
+  
+  // Campos para enlace de acceso directo (Magic Link)
+  loginToken       String?           @unique
+  loginTokenExpires DateTime?
   
   accounts         Account[]
   sessions         Session[]
@@ -146,20 +154,29 @@ model Student {
   payments         Payment[]
   pollVotes        PollVote[]
   inquiries        Inquiry[]  
+  
+  // --- NUEVO: Relación de muchos a muchos para Cobros Extra específicos asignados a este alumno ---
+  assignedExtraFees ExtraFee[] @relation("AssignedExtraFees")
 }
 
 // Cobros Extraordinarios (Ej: Cumpleaños, Paseos)
 model ExtraFee {
-  id           String     @id @default(cuid())
-  title        String
-  description  String?    @db.Text
-  amount       Float
-  dueDate      DateTime?
+  id               String     @id @default(cuid())
+  title            String
+  description      String?    @db.Text
+  amount           Float
+  dueDate          DateTime?
   
-  schoolYearId String
-  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  // --- NUEVO: Determina si este cobro aplica a todos los alumnos por defecto ---
+  isGlobal         Boolean    @default(true) 
   
-  payments     Payment[]
+  schoolYearId     String
+  schoolYear       SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  
+  payments         Payment[]
+  
+  // --- NUEVO: Si isGlobal es false, aquí guardamos a qué alumnos se les cobra ---
+  assignedStudents Student[]  @relation("AssignedExtraFees")
 }
 
 // Tabla de Pagos (Cuotas regulares o Extraordinarios)
@@ -224,7 +241,7 @@ model Comment {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// --- NUEVA ARQUITECTURA PARA ENCUESTAS DINÁMICAS ---
+// --- ARQUITECTURA PARA ENCUESTAS DINÁMICAS ---
 
 // 1. Tabla principal de la Encuesta/Formulario
 model Poll {
@@ -324,16 +341,16 @@ model Inquiry {
 }
 
 model InquiryResponse {
-  id          String   @id @default(cuid())
-  content     String   @db.Text
+  id        String   @id @default(cuid())
+  content   String   @db.Text
   
-  inquiryId   String
-  inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  inquiryId String
+  inquiry   Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 // --- TABLA PARA EL MÓDULO DE CALENDARIO ---

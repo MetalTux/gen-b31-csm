@@ -136,8 +136,6 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
       throw new Error("El alumno no existe en el sistema.");
     }
     
-    // --- LA SOLUCIÓN MÁGICA ---
-    // Si hay un apoderado, usamos su ID. Si la lista está vacía, usamos el ID del Tesorero (adminUser.id)
     const assignToUserId = student.parents.length > 0 ? student.parents[0].id : adminUser.id;
 
     const { selectedQuotas, selectedExtraFeeIds, studentId, paymentDate, paymentMethod } = input;
@@ -152,7 +150,7 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
               isVerified: true,
               date: paymentDate, 
               schoolYearId: activeYear.id,
-              userId: assignToUserId, // Asignación dinámica (Apoderado o Tesorero)
+              userId: assignToUserId, 
               studentId,
               quotaNumber: quotaNum,
             },
@@ -172,7 +170,7 @@ export async function createPresentialPayment(input: CreatePresentialPaymentInpu
               isVerified: true,
               date: paymentDate, 
               schoolYearId: activeYear.id,
-              userId: assignToUserId, // Asignación dinámica (Apoderado o Tesorero)
+              userId: assignToUserId, 
               studentId,
               extraFeeId: extraId,
             },
@@ -213,9 +211,15 @@ export async function rejectPayment(paymentId: string) {
 }
 
 /**
- * 5. ACCIÓN: CREAR UN COBRO EXTRAORDINARIO
+ * 5. ACCIÓN: CREAR UN COBRO EXTRAORDINARIO (ACTUALIZADO)
  */
-export async function createExtraFee(title: string, amount: number, dueDate: Date | null) {
+export async function createExtraFee(
+  title: string, 
+  amount: number, 
+  dueDate: Date | null,
+  isGlobal: boolean = true,
+  assignedStudentIds: string[] = []
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) throw new Error("No autorizado.");
@@ -231,7 +235,12 @@ export async function createExtraFee(title: string, amount: number, dueDate: Dat
         title,
         amount,
         dueDate,
+        isGlobal,
         schoolYearId: activeYear.id,
+        // Si no es global, conectamos los IDs de los alumnos específicos
+        assignedStudents: isGlobal ? undefined : {
+          connect: assignedStudentIds.map(id => ({ id }))
+        }
       },
     });
 
@@ -277,7 +286,6 @@ export async function deletePayment(paymentId: string) {
     const adminUser = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (adminUser?.role !== "ADMIN") throw new Error("Permisos insuficientes.");
 
-    // Se elimina definitivamente de la base de datos
     await prisma.payment.delete({
       where: { id: paymentId },
     });

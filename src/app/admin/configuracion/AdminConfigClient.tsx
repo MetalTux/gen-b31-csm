@@ -12,7 +12,7 @@ import {
   User, 
   CheckCircle2, 
   PlusCircle, 
-  Edit2, // <-- Importamos el ícono de edición
+  Edit2,
   X
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
@@ -26,6 +26,7 @@ interface SchoolYear {
   initialBalance: number;
   quotaAmount: number;
   totalQuotas: number;
+  minimumBaseQuotas: number; // <-- NUEVO TIPO
   teacherName: string | null;
 }
 
@@ -36,71 +37,71 @@ interface AdminConfigClientProps {
 export default function AdminConfigClient({ schoolYears }: AdminConfigClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
-
-  // NUEVO: Estado para saber si estamos editando un año existente
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [className, setClassName] = useState("");
   const [quotaAmount, setQuotaAmount] = useState("");
   const [totalQuotas, setTotalQuotas] = useState("10");
+  
+  // NUEVO: Estado para el mínimo de cuotas
+  const [minimumBaseQuotas, setMinimumBaseQuotas] = useState("10");
+  
   const [initialBalance, setInitialBalance] = useState("0");
   const [teacherName, setTeacherName] = useState("");
 
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
   const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
 
-  // Función para resetear el formulario a su estado de "Creación"
   const resetForm = () => {
     setEditingId(null);
     setYear(new Date().getFullYear().toString());
     setClassName("");
     setQuotaAmount("");
     setTotalQuotas("10");
+    setMinimumBaseQuotas("10"); // <-- Reset
     setInitialBalance("0");
     setTeacherName("");
   };
 
-  // Función para cargar los datos en el formulario cuando le dan a "Editar"
   const startEditing = (targetYear: SchoolYear) => {
     setEditingId(targetYear.id);
     setYear(targetYear.year.toString());
     setClassName(targetYear.className);
     setQuotaAmount(targetYear.quotaAmount.toString());
     setTotalQuotas(targetYear.totalQuotas.toString());
+    setMinimumBaseQuotas(targetYear.minimumBaseQuotas.toString()); // <-- Carga
     setInitialBalance(targetYear.initialBalance.toString());
     setTeacherName(targetYear.teacherName || "");
     
-    // Hacemos scroll suave hacia el inicio (útil en móviles)
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // --- ACCIÓN: GUARDAR (Crear o Actualizar) ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!year || !className || !quotaAmount || !totalQuotas || isSubmitting) return;
+    if (!year || !className || !quotaAmount || !totalQuotas || !minimumBaseQuotas || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       if (editingId) {
-        // MODO EDICIÓN
         await updateSchoolYear({
           id: editingId,
           year: parseInt(year),
           className,
           quotaAmount: parseFloat(quotaAmount),
           totalQuotas: parseInt(totalQuotas),
+          minimumBaseQuotas: parseInt(minimumBaseQuotas), // <-- Envío
           initialBalance: parseFloat(initialBalance || "0"),
           teacherName
         });
         setAlertConfig({ isOpen: true, type: "success", title: "Cambios Guardados", message: "La configuración del periodo se ha actualizado con éxito." });
       } else {
-        // MODO CREACIÓN
         await createSchoolYear({
           year: parseInt(year),
           className,
           quotaAmount: parseFloat(quotaAmount),
           totalQuotas: parseInt(totalQuotas),
+          minimumBaseQuotas: parseInt(minimumBaseQuotas), // <-- Envío
           initialBalance: parseFloat(initialBalance || "0"),
           teacherName
         });
@@ -187,9 +188,16 @@ export default function AdminConfigClient({ schoolYears }: AdminConfigClientProp
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Saldo Caja Anterior ($)</label>
-            <input type="number" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} placeholder="Ej: 35000" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
+          {/* NUEVO: Fila para Saldo Inicial y Mínimo de Cuotas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Saldo Anterior ($)</label>
+              <input type="number" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} placeholder="Ej: 35000" className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-accent text-gray-700 bg-white" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-brand-navy uppercase tracking-wide">Mín. Cuotas</label>
+              <input type="number" value={minimumBaseQuotas} onChange={e => setMinimumBaseQuotas(e.target.value)} placeholder="Ej: 10" required min="1" max={totalQuotas} className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent text-brand-navy bg-brand-navy/5" title="Cantidad mínima obligatoria para no cobrar Extra" />
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -249,6 +257,10 @@ export default function AdminConfigClient({ schoolYears }: AdminConfigClientProp
 
                     <div className="mt-4 space-y-1 text-xs text-gray-600 font-medium">
                       <div className="flex items-center gap-1"><DollarSign size={13} className="text-gray-400"/> Cuota Base: <strong>${yearObj.quotaAmount.toLocaleString("es-CL")} ({yearObj.totalQuotas} meses)</strong></div>
+                      
+                      {/* NUEVO: Mostramos las cuotas exigidas */}
+                      <div className="flex items-center gap-1"><CheckCircle2 size={13} className="text-brand-accent"/> Exigidas: <strong>{yearObj.minimumBaseQuotas} de {yearObj.totalQuotas} cuotas</strong></div>
+                      
                       <div className="flex items-center gap-1"><Layers size={13} className="text-gray-400"/> Pozo Inicial: <strong className={yearObj.initialBalance >= 0 ? "text-emerald-700" : "text-red-700"}>${yearObj.initialBalance.toLocaleString("es-CL")}</strong></div>
                       {yearObj.teacherName && (
                         <div className="flex items-center gap-1"><User size={13} className="text-gray-400"/> Profesor(a): <span>{yearObj.teacherName}</span></div>

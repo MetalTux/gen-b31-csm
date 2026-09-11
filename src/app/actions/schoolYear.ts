@@ -18,6 +18,7 @@ interface CreateYearInput {
   initialBalance: number;
   quotaAmount: number;
   totalQuotas: number;
+  minimumBaseQuotas: number; // <-- NUEVO CAMPO OBLIGATORIO
   teacherName: string;
 }
 
@@ -46,6 +47,7 @@ export async function createSchoolYear(input: CreateYearInput) {
         initialBalance: input.initialBalance,
         quotaAmount: input.quotaAmount,
         totalQuotas: input.totalQuotas,
+        minimumBaseQuotas: input.minimumBaseQuotas, // <-- NUEVO
         teacherName: input.teacherName.trim(),
         isActive: false 
       },
@@ -59,7 +61,7 @@ export async function createSchoolYear(input: CreateYearInput) {
 }
 
 /**
- * 2. ACCIÓN: ACTUALIZAR UN AÑO ESCOLAR EXISTENTE (¡NUEVO!)
+ * 2. ACCIÓN: ACTUALIZAR UN AÑO ESCOLAR EXISTENTE
  */
 export async function updateSchoolYear(input: UpdateYearInput) {
   try {
@@ -83,6 +85,7 @@ export async function updateSchoolYear(input: UpdateYearInput) {
         initialBalance: input.initialBalance,
         quotaAmount: input.quotaAmount,
         totalQuotas: input.totalQuotas,
+        minimumBaseQuotas: input.minimumBaseQuotas, // <-- NUEVO
         teacherName: input.teacherName.trim(),
       },
     });
