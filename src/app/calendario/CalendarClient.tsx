@@ -1,7 +1,7 @@
 // src/app/calendario/CalendarClient.tsx
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { EventCategory } from "@prisma/client";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Trash2, Edit2, X, Loader2, CalendarPlus } from "lucide-react";
 import { createEvent, updateEvent, deleteEvent } from "@/app/actions/event";
@@ -68,21 +68,22 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
   const [endDateStr, setEndDateStr] = useState("");
   const [category, setCategory] = useState<EventCategory>("ACADEMICO");
 
-  // MATEMÁTICA DEL CALENDARIO
+  // --- NUEVA MATEMÁTICA DEL CALENDARIO ---
   const getFirstDayOfMonth = (year: number, month: number) => {
     const day = new Date(year, month, 1).getDay();
-    return day === 0 ? 6 : day - 1; 
+    return day === 0 ? 6 : day - 1; // 0 es Lunes, 6 es Domingo
   };
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  
   const firstDayIndex = getFirstDayOfMonth(currentYear, currentMonth);
 
+  // Generamos un arreglo con 42 fechas exactas (incluyendo días del mes anterior y posterior)
   const daysArray = Array.from({ length: 42 }, (_, i) => {
     const dayNumber = i - firstDayIndex + 1;
-    if (dayNumber > 0 && dayNumber <= daysInMonth) {
-      return new Date(currentYear, currentMonth, dayNumber);
-    }
-    return null;
+    return new Date(currentYear, currentMonth, dayNumber);
   });
+
+  // Dividimos los 42 días en 6 semanas para aprovechar CSS Grid por filas
+  const weeks = Array.from({ length: 6 }, (_, i) => daysArray.slice(i * 7, i * 7 + 7));
 
   const prevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
@@ -180,15 +181,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
     });
   };
 
-  const getEventsForDay = (date: Date) => {
-    return initialEvents.filter(ev => {
-      const evDate = new Date(ev.startDate);
-      return evDate.getDate() === date.getDate() && 
-             evDate.getMonth() === date.getMonth() && 
-             evDate.getFullYear() === date.getFullYear();
-    });
-  };
-
   const handleToggleAllDay = (checked: boolean) => {
     setIsAllDay(checked);
     if (!startDateStr) return;
@@ -202,7 +194,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
     }
   };
 
-  // --- GENERADOR DE ENLACE DE GOOGLE CALENDAR ---
   const getGoogleCalendarUrl = (ev: CalendarEvent) => {
     const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
     const titleParam = encodeURIComponent(ev.title);
@@ -228,7 +219,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
     return `${baseUrl}&text=${titleParam}&dates=${datesParam}&details=${detailsParam}&location=${locationParam}`;
   };
 
-  // --- NUEVO: GENERADOR DE ENLACE DE OUTLOOK CALENDAR ---
   const getOutlookCalendarUrl = (ev: CalendarEvent) => {
     const baseUrl = "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent";
     const titleParam = encodeURIComponent(ev.title);
@@ -283,51 +273,136 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
         )}
       </div>
 
-      {/* GRILLA DEL CALENDARIO */}
+      {/* CABECERA DÍAS DE LA SEMANA */}
       <div className="grid grid-cols-7 bg-gray-100 gap-[1px] border-b border-gray-100">
         {DAYS_OF_WEEK.map(day => (
           <div key={day} className="bg-white py-3 text-center text-xs font-bold text-gray-500 tracking-wide uppercase">
             {day}
           </div>
         ))}
+      </div>
 
-        {daysArray.map((date, index) => {
-          if (!date) return <div key={`empty-${index}`} className="bg-gray-50/50 min-h-[100px] md:min-h-[120px]"></div>;
+      {/* --- NUEVO MOTOR DE RENDERIZADO DEL CALENDARIO POR SEMANAS --- */}
+      <div className="flex flex-col bg-gray-100 gap-[1px]">
+        {weeks.map((week, wIndex) => {
+          
+          // 1. Encontrar los eventos que suceden (o se cruzan) en esta semana específica
+          const weekEvents = initialEvents.filter(ev => {
+            const eStart = new Date(ev.startDate).setHours(0,0,0,0);
+            const eEnd = ev.endDate ? new Date(ev.endDate).setHours(0,0,0,0) : eStart;
+            const wStart = new Date(week[0]).setHours(0,0,0,0);
+            const wEnd = new Date(week[6]).setHours(0,0,0,0);
+            return eStart <= wEnd && eEnd >= wStart;
+          });
 
-          const isToday = new Date().toDateString() === date.toDateString();
-          const dayEvents = getEventsForDay(date);
+          // 2. Ordenar eventos para que los más largos se dibujen arriba (mejor acomodo)
+          weekEvents.sort((a, b) => {
+            const aStart = new Date(a.startDate).setHours(0,0,0,0);
+            const aEnd = a.endDate ? new Date(a.endDate).setHours(0,0,0,0) : aStart;
+            const bStart = new Date(b.startDate).setHours(0,0,0,0);
+            const bEnd = b.endDate ? new Date(b.endDate).setHours(0,0,0,0) : bStart;
+            const aLen = aEnd - aStart;
+            const bLen = bEnd - bStart;
+            if (bLen !== aLen) return bLen - aLen;
+            return aStart - bStart;
+          });
+
+          // 3. Algoritmo para asignar una Fila (Row) a cada evento sin que colisionen
+          const occupied = Array.from({ length: 20 }, () => Array(7).fill(false));
+          const placedEvents = weekEvents.map(ev => {
+            const eStart = new Date(ev.startDate).setHours(0,0,0,0);
+            const eEnd = ev.endDate ? new Date(ev.endDate).setHours(0,0,0,0) : eStart;
+            const wStart = new Date(week[0]).setHours(0,0,0,0);
+            const wEnd = new Date(week[6]).setHours(0,0,0,0);
+
+            let startCol = 0;
+            let endCol = 6;
+            let isStartOfWeek = false; // Indica si el evento empezó realmente aquí o viene de la semana pasada
+            let isEndOfWeek = false;   // Indica si el evento termina aquí o sigue la próxima semana
+
+            // Calcular en qué columnas empieza y termina el evento esta semana
+            for (let i = 0; i < 7; i++) {
+              const dayTime = new Date(week[i]).setHours(0,0,0,0);
+              if (dayTime === eStart) { startCol = i; isStartOfWeek = true; }
+              if (dayTime === eEnd) { endCol = i; isEndOfWeek = true; }
+            }
+            if (eStart < wStart) { startCol = 0; isStartOfWeek = false; }
+            if (eEnd > wEnd) { endCol = 6; isEndOfWeek = false; }
+
+            // Buscar la primera fila disponible donde quepa todo el evento
+            let targetRow = 2; // La Fila 1 está reservada para los números de los días
+            while (true) {
+              let isFree = true;
+              for (let c = startCol; c <= endCol; c++) {
+                if (occupied[targetRow][c]) { isFree = false; break; }
+              }
+              if (isFree) break;
+              targetRow++;
+            }
+
+            // Marcar la fila como ocupada
+            for (let c = startCol; c <= endCol; c++) {
+              occupied[targetRow][c] = true;
+            }
+
+            return { ev, startCol, endCol, row: targetRow, isStartOfWeek, isEndOfWeek };
+          });
 
           return (
-            <div 
-              key={date.toISOString()}
-              onClick={() => handleDayClick(date)}
-              className={`bg-white min-h-[100px] md:min-h-[120px] p-1.5 md:p-2 flex flex-col group transition-colors ${userRole === "ADMIN" ? "cursor-pointer hover:bg-blue-50/30" : ""}`}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? "bg-brand-accent text-brand-navy" : "text-gray-700 group-hover:text-brand-navy"}`}>
-                  {date.getDate()}
-                </span>
-              </div>
+            <div key={wIndex} className="grid grid-cols-7 gap-[1px] relative bg-gray-100">
               
-              <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar flex-1 max-h-[80px] md:max-h-[100px]">
-                {dayEvents.map(ev => {
-                  const style = CATEGORY_STYLES[ev.category];
-                  const eventDate = new Date(ev.startDate);
-                  const timeString = ev.isAllDay ? "" : eventDate.toLocaleTimeString("es-CL", { hour: '2-digit', minute: '2-digit', hour12: false });
+              {/* Espaciador invisible para proteger la zona de los números de los días (Fila 1) */}
+              <div style={{ gridColumn: "1 / -1", gridRow: 1, height: "36px" }} className="pointer-events-none" />
 
-                  return (
-                    <div 
-                      key={ev.id}
-                      onClick={(e) => handleEventClick(e, ev)}
-                      className={`text-[10px] md:text-xs px-1.5 py-1 rounded truncate border cursor-pointer hover:opacity-80 transition-opacity ${style.bg} ${style.text} ${style.border}`}
-                      title={ev.title}
-                    >
-                      {!ev.isAllDay && <span className="font-bold mr-1">{timeString}</span>}
-                      {ev.title}
+              {/* FONDOS Y NÚMEROS DE LOS DÍAS */}
+              {week.map((day, dIndex) => {
+                const isCurrentMonth = day.getMonth() === currentMonth;
+                const isToday = new Date().toDateString() === day.toDateString();
+                
+                return (
+                  <div 
+                    key={dIndex} 
+                    style={{ gridColumnStart: dIndex + 1, gridRow: "1 / -1" }}
+                    className={`min-h-[120px] transition-colors flex flex-col ${isCurrentMonth ? "bg-white" : "bg-gray-50/50"} ${userRole === "ADMIN" ? "cursor-pointer hover:bg-blue-50/30" : ""}`}
+                    onClick={() => handleDayClick(day)}
+                  >
+                    <div className="p-1.5 flex justify-between items-start">
+                      <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-0 ${isToday ? "bg-brand-accent text-brand-navy" : isCurrentMonth ? "text-gray-700" : "text-gray-400"}`}>
+                        {day.getDate()}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
+
+              {/* CINTAS CONTINUAS DE LOS EVENTOS */}
+              {placedEvents.map((p, idx) => {
+                const style = CATEGORY_STYLES[p.ev.category];
+                const timeString = p.ev.isAllDay ? "" : new Date(p.ev.startDate).toLocaleTimeString("es-CL", { hour: '2-digit', minute: '2-digit', hour12: false });
+                
+                // Efecto de cinta: Redondeado solo en las puntas donde realmente empieza o termina el evento
+                const radiusClass = `${p.isStartOfWeek ? 'rounded-l-md border-l' : 'border-l-0'} ${p.isEndOfWeek ? 'rounded-r-md border-r' : 'border-r-0'}`;
+
+                return (
+                  <div 
+                    key={`${p.ev.id}-${idx}`}
+                    style={{ gridColumnStart: p.startCol + 1, gridColumnEnd: p.endCol + 2, gridRowStart: p.row }}
+                    className="z-10 px-1 py-0.5 pointer-events-none mt-0.5"
+                  >
+                    <div 
+                      onClick={(e) => handleEventClick(e, p.ev)}
+                      className={`pointer-events-auto h-full text-[10px] md:text-xs px-2 py-1 truncate cursor-pointer hover:opacity-90 flex items-center justify-center shadow-sm border-y transition-colors ${style.bg} ${style.text} ${style.border} ${radiusClass}`}
+                      title={p.ev.title}
+                    >
+                      {/* Texto Centrado Perfecto */}
+                      <span className="truncate flex items-center gap-1.5">
+                        {!p.ev.isAllDay && p.isStartOfWeek && <span className="font-bold">{timeString}</span>}
+                        {p.ev.title}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -357,7 +432,7 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
                       {new Date(selectedEvent.startDate).toLocaleDateString("es-CL", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                     {selectedEvent.endDate && (
-                      <p className="text-xs text-gray-500">Hasta: {new Date(selectedEvent.endDate).toLocaleDateString("es-CL")}</p>
+                      <p className="text-xs text-gray-500">Hasta: {new Date(selectedEvent.endDate).toLocaleDateString("es-CL", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     )}
                   </div>
                 </div>
@@ -385,7 +460,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
               </div>
 
               <div className="pt-4 border-t border-gray-100 flex flex-col gap-2">
-                {/* BOTÓN AGREGAR A GOOGLE CALENDAR */}
                 <a 
                   href={getGoogleCalendarUrl(selectedEvent)}
                   target="_blank"
@@ -395,7 +469,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
                   <CalendarPlus size={18} /> Google Calendar
                 </a>
 
-                {/* NUEVO BOTÓN: AGREGAR A OUTLOOK CALENDAR */}
                 <a 
                   href={getOutlookCalendarUrl(selectedEvent)}
                   target="_blank"
@@ -405,7 +478,6 @@ export default function CalendarClient({ initialEvents, userRole, currentUserId 
                   <CalendarPlus size={18} /> Outlook / Office 365
                 </a>
 
-                {/* Controles de Administración (Solo Directiva) */}
                 {userRole === "ADMIN" && (
                   <div className="flex gap-2 pt-2">
                     <button onClick={openEditForm} className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
