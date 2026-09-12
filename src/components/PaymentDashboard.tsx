@@ -14,7 +14,7 @@ import {
   FileText,
   Calendar,
   Eye,
-  X // <-- Importamos la X para cerrar el modal
+  X 
 } from "lucide-react";
 import RenderPaymentForm from "./RenderPaymentForm";
 
@@ -26,11 +26,14 @@ interface Student {
   startQuotaNumber: number;
 }
 
+// ACTUALIZADO: Añadimos isGlobal y assignedStudents
 interface ExtraFee {
   id: string;
   title: string;
   amount: number;
   dueDate: Date | null;
+  isGlobal: boolean;
+  assignedStudents?: { id: string }[];
 }
 
 interface Payment {
@@ -84,11 +87,9 @@ export default function PaymentDashboard({
   currentUserId 
 }: PaymentDashboardProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || "");
-  
-  // --- NUEVO ESTADO PARA EL MODAL DEL COMPROBANTE ---
   const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null);
 
-  // 1. Filtrados individuales para las tarjetas del hijo seleccionado
+  // 1. Filtrados individuales para el hijo seleccionado
   const studentPayments = payments.filter(p => p.studentId === selectedStudentId);
   const currentStudent = students.find(s => s.id === selectedStudentId);
   const startQuota = currentStudent?.startQuotaNumber || 1;
@@ -102,8 +103,12 @@ export default function PaymentDashboard({
 
   const totalPendingQuotasAmount = Math.max(0, totalExpectedQuotasAmount - totalVerifiedQuotasAmount);
 
+  // SOLUCIÓN: Filtramos los cobros extras que aplican específicamente al hijo seleccionado actualmente en las pestañas
+  const currentStudentExtraFees = activeYear.extraFees.filter(fee => 
+    fee.isGlobal || fee.assignedStudents?.some(s => s.id === selectedStudentId)
+  );
 
-  // --- MATEMÁTICA MAESTRA DE TRANSPARENCIA GLOBAL DEL CURSO ---
+  // --- MATEMÁTICA MAESTRA ---
   const totalIngresosCurso = allCoursePayments
     .filter(p => p.isVerified)
     .reduce((sum, p) => sum + p.amount, 0);
@@ -122,6 +127,12 @@ export default function PaymentDashboard({
       </div>
     );
   }
+
+  // Clona activeYear pero le inyecta solo los extraFees filtrados para pasárselo al formulario de rendición
+  const activeYearForForm = {
+    ...activeYear,
+    extraFees: currentStudentExtraFees
+  };
 
   return (
     <div className="space-y-8 relative">
@@ -166,7 +177,6 @@ export default function PaymentDashboard({
         </div>
       </div>
 
-      {/* --- DISEÑO TRADICIONAL EN COLUMNAS (OPERACIONES PARTICULARES) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* SECCIÓN IZQUIERDA Y CENTRAL: GRILLAS DEL ALUMNO SELECCIONADO */}
@@ -270,12 +280,12 @@ export default function PaymentDashboard({
             </div>
           </div>
 
-          {/* Cobros Extraordinarios */}
-          {activeYear.extraFees.length > 0 && (
+          {/* Cobros Extraordinarios (AHORA FILTRADOS) */}
+          {currentStudentExtraFees.length > 0 && (
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
               <h2 className="text-lg font-bold text-brand-navy">Cobros Extraordinarios / Eventos Especiales</h2>
               <div className="space-y-3">
-                {activeYear.extraFees.map((fee) => {
+                {currentStudentExtraFees.map((fee) => {
                   const paymentForExtra = studentPayments.find(p => p.extraFeeId === fee.id);
                   
                   let badgeClass = "bg-red-50 text-red-700 border-red-100";
@@ -290,7 +300,12 @@ export default function PaymentDashboard({
                   return (
                     <div key={fee.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 gap-3">
                       <div>
-                        <h4 className="text-sm font-bold text-brand-navy">{fee.title}</h4>
+                        <h4 className="text-sm font-bold text-brand-navy flex items-center gap-2">
+                          {fee.title}
+                          {!fee.isGlobal && (
+                            <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded border border-amber-200">ESPECÍFICO</span>
+                          )}
+                        </h4>
                         {fee.dueDate && (
                           <span className="text-xs text-gray-400 font-medium block mt-0.5">
                             📅 Vence: {new Date(fee.dueDate).toLocaleDateString("es-CL")}
@@ -370,7 +385,7 @@ export default function PaymentDashboard({
         <div className="lg:col-span-1">
           <RenderPaymentForm 
             key={selectedStudentId}
-            activeYear={activeYear}
+            activeYear={activeYearForForm} // <-- Pasamos el año modificado solo con los cobros permitidos
             studentId={selectedStudentId}
             studentPayments={studentPayments}
             startQuotaNumber={startQuota}
@@ -399,7 +414,6 @@ export default function PaymentDashboard({
             </div>
             
             <div className="flex-1 overflow-auto bg-gray-100/50 p-2 sm:p-4 flex items-center justify-center min-h-[50vh]">
-              {/* Usamos iframe que es compatible nativamente con PDFs e imágenes */}
               <iframe 
                 src={receiptModalUrl} 
                 className="w-full h-[60vh] rounded-xl border border-gray-200 bg-white shadow-sm"

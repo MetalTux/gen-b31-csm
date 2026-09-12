@@ -95,7 +95,7 @@ model SchoolYear {
   className         String     // Ej: "7 Básico B" o "8 Básico B"
   isActive          Boolean    @default(false) // Solo un año debería estar activo a la vez
   
-  // --- NUEVO: Cantidad mínima de cuotas base requeridas para este año ---
+  // Cantidad mínima de cuotas base requeridas para este año
   minimumBaseQuotas Int        @default(10)
   
   initialBalance    Float      @default(0)     // Saldo a favor/contra del año anterior
@@ -106,6 +106,10 @@ model SchoolYear {
   // Relaciones históricas
   payments          Payment[]
   expenses          Expense[]
+  
+  // --- NUEVO: Relación con la tabla de Ingresos Generales del curso ---
+  generalIncomes    GeneralIncome[]
+
   activities        Activity[]
   extraFees         ExtraFee[]
   polls             Poll[]
@@ -155,7 +159,7 @@ model Student {
   pollVotes        PollVote[]
   inquiries        Inquiry[]  
   
-  // --- NUEVO: Relación de muchos a muchos para Cobros Extra específicos asignados a este alumno ---
+  // Relación de muchos a muchos para Cobros Extra específicos asignados a este alumno
   assignedExtraFees ExtraFee[] @relation("AssignedExtraFees")
 }
 
@@ -167,7 +171,7 @@ model ExtraFee {
   amount           Float
   dueDate          DateTime?
   
-  // --- NUEVO: Determina si este cobro aplica a todos los alumnos por defecto ---
+  // Determina si este cobro aplica a todos los alumnos por defecto
   isGlobal         Boolean    @default(true) 
   
   schoolYearId     String
@@ -175,7 +179,7 @@ model ExtraFee {
   
   payments         Payment[]
   
-  // --- NUEVO: Si isGlobal es false, aquí guardamos a qué alumnos se les cobra ---
+  // Si isGlobal es false, aquí guardamos a qué alumnos se les cobra
   assignedStudents Student[]  @relation("AssignedExtraFees")
 }
 
@@ -211,6 +215,20 @@ model Expense {
   
   schoolYearId String
   schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Restrict)
+}
+
+// --- NUEVO: Tabla de Ingresos Generales (Pro-fondos, Ventas, etc.) ---
+model GeneralIncome {
+  id           String     @id @default(cuid())
+  amount       Float
+  date         DateTime   @default(now())
+  concept      String     // Ej: "Venta de Garage", "Rifa Solidaria"
+  receiptUrl   String?    // Por si quieren subir alguna foto o comprobante
+  
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Restrict)
+  
+  createdAt    DateTime   @default(now())
 }
 
 // Tabla de Actividades (Blog de novedades)

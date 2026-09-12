@@ -10,78 +10,28 @@ import {
   deleteExtraFee,
   deletePayment
 } from "@/app/actions/payment";
+import { createGeneralIncome, deleteGeneralIncome } from "@/app/actions/generalIncome"; // <-- NUEVAS ACCIONES
 import { 
-  Check, 
-  X, 
-  Loader2, 
-  FileText, 
-  UserCheck, 
-  PlusCircle, 
-  Trash2, 
-  DollarSign, 
-  Calendar,
-  AlertCircle,
-  Minus,
-  BarChart3,
-  Download,
-  TrendingUp,
-  CreditCard,
-  Wallet,
-  Landmark,
-  Search,
-  Plus,
-  Eye,
-  Globe,
-  Users,
-  Wand2 // Ícono para el Botón Mágico
+  Check, X, Loader2, FileText, UserCheck, PlusCircle, Trash2, 
+  DollarSign, Calendar, AlertCircle, Minus, BarChart3, Download, 
+  TrendingUp, CreditCard, Wallet, Landmark, Search, Plus, Eye, 
+  Globe, Users, Wand2, PackageOpen // <-- NUEVO ÍCONO
 } from "lucide-react";
 import AlertModal, { AlertType } from "@/components/AlertModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
-interface Student {
-  id: string;
-  firstName: string;
-  lastName: string;
-  startQuotaNumber: number;
-}
-
-// ACTUALIZADO: Soporta isGlobal y assignedStudents
-interface ExtraFee {
-  id: string;
-  title: string;
-  amount: number;
-  dueDate: Date | null;
-  isGlobal: boolean;
-  assignedStudents?: { id: string; firstName: string; lastName: string }[];
-}
-
-interface User {
-  id: string;
-  name: string | null;
-  email: string | null;
-}
+interface Student { id: string; firstName: string; lastName: string; startQuotaNumber: number; }
+interface ExtraFee { id: string; title: string; amount: number; dueDate: Date | null; isGlobal: boolean; assignedStudents?: { id: string; firstName: string; lastName: string }[]; }
+interface User { id: string; name: string | null; email: string | null; }
+interface GeneralIncome { id: string; amount: number; date: Date; concept: string; }
 
 interface Payment {
-  id: string;
-  amount: number;
-  date: Date;
-  isVerified: boolean;
-  receiptUrl: string | null;
-  quotaNumber: number | null;
-  studentId: string | null;
-  extraFeeId: string | null;
-  student: Student | null;
-  user: User;
-  extraFee?: ExtraFee | null;
+  id: string; amount: number; date: Date; isVerified: boolean; receiptUrl: string | null;
+  quotaNumber: number | null; extraFeeId: string | null; studentId: string | null;
+  student: Student | null; user: User; extraFee?: ExtraFee | null;
 }
 
-interface SchoolYear {
-  id: string;
-  year: number;
-  quotaAmount: number;
-  totalQuotas: number;
-  minimumBaseQuotas: number; // Requerido para el cálculo matemático
-}
+interface SchoolYear { id: string; year: number; quotaAmount: number; totalQuotas: number; minimumBaseQuotas: number; }
 
 interface AdminRevenueClientProps {
   activeYear: SchoolYear;
@@ -89,6 +39,7 @@ interface AdminRevenueClientProps {
   pendingPayments: Payment[];
   verifiedPayments: Payment[];
   extraFees: ExtraFee[];
+  generalIncomes: GeneralIncome[]; // <-- NUEVO TIPO DE DATO
 }
 
 const MONTHS_MAP: { [key: number]: string } = {
@@ -97,11 +48,7 @@ const MONTHS_MAP: { [key: number]: string } = {
 };
 
 export default function AdminRevenueClient({
-  activeYear,
-  students,
-  pendingPayments,
-  verifiedPayments,
-  extraFees
+  activeYear, students, pendingPayments, verifiedPayments, extraFees, generalIncomes
 }: AdminRevenueClientProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "pending" | "cash" | "fees">("summary");
 
@@ -112,21 +59,22 @@ export default function AdminRevenueClient({
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
   const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null);
 
-  const [alertConfig, setAlertConfig] = useState<{
-    isOpen: boolean; type: AlertType; title: string; message: string;
-  }>({ isOpen: false, type: "success", title: "", message: "" });
+  const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean; type: AlertType; title: string; message: string; }>({ isOpen: false, type: "success", title: "", message: "" });
+  const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>; }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
 
-  const [confirmConfig, setConfirmConfig] = useState<{
-    isOpen: boolean; title: string; message: string; onConfirm: () => Promise<void>;
-  }>({ isOpen: false, title: "", message: "", onConfirm: async () => {} });
-
+  // --- ESTADOS FORMULARIO CAJA ---
+  const [incomeType, setIncomeType] = useState<"STUDENT" | "GENERAL">("STUDENT"); // <-- SELECTOR DE TIPO DE INGRESO
+  
   const [cashStudentId, setCashStudentId] = useState("");
   const [cashQuotas, setCashQuotas] = useState<number[]>([]);
   const [cashExtras, setCashExtras] = useState<string[]>([]);
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [paymentMethod, setPaymentMethod] = useState<"EFECTIVO" | "TRANSFERENCIA MANUAL">("EFECTIVO");
+  
+  // Estado para Ingreso General
+  const [generalConcept, setGeneralConcept] = useState("");
+  const [generalAmount, setGeneralAmount] = useState("");
 
-  // NUEVOS ESTADOS PARA COBROS EXTRAS
   const [newFeeTitle, setNewFeeTitle] = useState("");
   const [newFeeAmount, setNewFeeAmount] = useState("");
   const [newFeeDueDate, setNewFeeDueDate] = useState("");
@@ -136,6 +84,7 @@ export default function AdminRevenueClient({
   const [cashSearchTerm, setCashSearchTerm] = useState("");
   const [feeSearchTerm, setFeeSearchTerm] = useState("");
 
+  // --- MATEMÁTICA Y TOTALES ---
   let totalPresupuestadoEsperado = 0;
   students.forEach(s => {
     const mesesCorrespondientes = (activeYear.totalQuotas - s.startQuotaNumber) + 1;
@@ -144,9 +93,44 @@ export default function AdminRevenueClient({
 
   const totalRecaudadoCuotas = verifiedPayments.filter(p => p.quotaNumber !== null).reduce((sum, p) => sum + p.amount, 0);
   const totalPorCobrarPendiente = Math.max(0, totalPresupuestadoEsperado - totalRecaudadoCuotas);
+  
   const totalCajaBanco = verifiedPayments.filter(p => p.receiptUrl !== "EFECTIVO").reduce((sum, p) => sum + p.amount, 0);
   const totalCajaEfectivo = verifiedPayments.filter(p => p.receiptUrl === "EFECTIVO").reduce((sum, p) => sum + p.amount, 0);
-  const totalGeneralEnCaja = totalCajaBanco + totalCajaEfectivo;
+  
+  // SUMAMOS LOS INGRESOS GENERALES A LA CAJA FÍSICA (Generalmente el pozo pro-fondos se maneja en efectivo o cuenta unificada)
+  const totalIngresosGenerales = generalIncomes.reduce((sum, g) => sum + g.amount, 0);
+  const totalGeneralEnCaja = totalCajaBanco + totalCajaEfectivo + totalIngresosGenerales;
+
+  // --- UNIFICAMOS EL LIBRO DE CAJA ---
+  const unifiedLedger = [
+    ...verifiedPayments.map(p => ({
+      id: `payment_${p.id}`,
+      realId: p.id,
+      type: "PAYMENT" as const,
+      date: p.date,
+      amount: p.amount,
+      concept: p.quotaNumber ? `Cuota ${MONTHS_MAP[p.quotaNumber]}` : p.extraFee?.title,
+      studentName: p.student ? `🎓 ${p.student.firstName} ${p.student.lastName}` : "No asignado",
+      method: p.receiptUrl,
+      searchString: `${p.student?.firstName} ${p.student?.lastName} ${p.quotaNumber ? 'cuota' : p.extraFee?.title}`.toLowerCase()
+    })),
+    ...generalIncomes.map(g => ({
+      id: `general_${g.id}`,
+      realId: g.id,
+      type: "GENERAL" as const,
+      date: g.date,
+      amount: g.amount,
+      concept: g.concept,
+      studentName: "🌟 Fondo Común (Curso)",
+      method: "EFECTIVO", // Asumimos efectivo para ventas, pero puedes expandirlo luego
+      searchString: `fondo comun curso ${g.concept}`.toLowerCase()
+    }))
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Orden cronológico descendente
+
+  const filteredLedger = unifiedLedger.filter(item => {
+    if (!cashSearchTerm) return true;
+    return item.searchString.includes(cashSearchTerm.toLowerCase());
+  });
 
   const handleExportExcel = async () => {
     if (isExporting) return;
@@ -187,94 +171,83 @@ export default function AdminRevenueClient({
     });
   };
 
-  const triggerDeletePayment = (id: string) => {
+  const triggerDeleteLedgerItem = (type: "PAYMENT" | "GENERAL", id: string) => {
     setConfirmConfig({
-      isOpen: true, title: "¿Eliminar Registro?", message: "Se borrará del libro de caja. ¿Estás seguro?",
+      isOpen: true, title: "¿Eliminar Registro?", message: "Se borrará permanentemente del libro de caja. ¿Estás seguro?",
       onConfirm: async () => {
         setProcessingId(id);
-        try { await deletePayment(id); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } 
+        try { 
+          if (type === "PAYMENT") {
+            await deletePayment(id); 
+          } else {
+            await deleteGeneralIncome(id);
+          }
+          setConfirmConfig(prev => ({ ...prev, isOpen: false })); 
+        } 
         catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo eliminar." }); } 
         finally { setProcessingId(null); }
       }
     });
   };
 
-  const handleRegisterCash = async (e: React.FormEvent) => {
+  const handleRegisterIncome = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cashStudentId || (cashQuotas.length === 0 && cashExtras.length === 0) || !paymentDate || isSubmitting) return;
+    if (isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       const parsedDate = new Date(paymentDate); parsedDate.setHours(12, 0, 0, 0);
-      await createPresentialPayment({ studentId: cashStudentId, selectedQuotas: cashQuotas, selectedExtraFeeIds: cashExtras, paymentDate: parsedDate, paymentMethod });
-      setCashStudentId(""); setCashQuotas([]); setCashExtras([]); setPaymentDate(new Date().toISOString().split('T')[0]); setIsMobileFormOpen(false);
+
+      if (incomeType === "STUDENT") {
+        if (!cashStudentId || (cashQuotas.length === 0 && cashExtras.length === 0)) throw new Error("Faltan datos del alumno.");
+        await createPresentialPayment({ studentId: cashStudentId, selectedQuotas: cashQuotas, selectedExtraFeeIds: cashExtras, paymentDate: parsedDate, paymentMethod });
+        setCashStudentId(""); setCashQuotas([]); setCashExtras([]); 
+      } else {
+        if (!generalConcept || !generalAmount) throw new Error("Falta el concepto o el monto.");
+        await createGeneralIncome(generalConcept, parseFloat(generalAmount), parsedDate);
+        setGeneralConcept(""); setGeneralAmount("");
+      }
+
+      setPaymentDate(new Date().toISOString().split('T')[0]); setIsMobileFormOpen(false);
       setAlertConfig({ isOpen: true, type: "success", title: "Registrado", message: "Ingreso guardado exitosamente." });
     } catch (error) {
       setAlertConfig({ isOpen: true, type: "error", title: "Error", message: error instanceof Error ? error.message : "Error desconocido." });
     } finally { setIsSubmitting(false); }
   };
 
-  // --- LÓGICA DEL BOTÓN MÁGICO ---
   const handleSelectMorosos = () => {
     const morososIds: string[] = [];
-
     students.forEach(student => {
-      // Calculamos las cuotas efectivas pagadas por el alumno
       const cuotasPagadas = verifiedPayments.filter(p => p.studentId === student.id && p.quotaNumber !== null).length;
-      
-      // Personalizamos el mínimo por si el alumno entró tarde (ej. si mínimo es 10, pero entró el mes 5, no se le pueden exigir 10)
       const maxExigible = (activeYear.totalQuotas - student.startQuotaNumber) + 1;
       const cuotasExigidas = Math.min(activeYear.minimumBaseQuotas, maxExigible);
-
-      if (cuotasPagadas < cuotasExigidas) {
-        morososIds.push(student.id);
-      }
+      if (cuotasPagadas < cuotasExigidas) morososIds.push(student.id);
     });
-
-    if (morososIds.length === 0) {
-      setAlertConfig({ isOpen: true, type: "success", title: "¡Excelente!", message: "Todos los alumnos han cumplido con la cuota mínima establecida." });
-    } else {
-      setNewFeeSelectedStudents(morososIds);
-    }
+    if (morososIds.length === 0) setAlertConfig({ isOpen: true, type: "success", title: "¡Excelente!", message: "Todos han cumplido con la cuota mínima." });
+    else setNewFeeSelectedStudents(morososIds);
   };
 
   const handleCreateFee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFeeTitle || !newFeeAmount || isSubmitting) return;
-    if (!newFeeIsGlobal && newFeeSelectedStudents.length === 0) {
-      return setAlertConfig({ isOpen: true, type: "error", title: "Faltan Alumnos", message: "Debes seleccionar al menos un alumno para este cobro específico." });
-    }
+    if (!newFeeIsGlobal && newFeeSelectedStudents.length === 0) return setAlertConfig({ isOpen: true, type: "error", title: "Faltan Alumnos", message: "Selecciona al menos un alumno." });
 
     setIsSubmitting(true);
     try {
       const dateParsed = newFeeDueDate ? new Date(newFeeDueDate) : null;
       await createExtraFee(newFeeTitle, parseFloat(newFeeAmount), dateParsed, newFeeIsGlobal, newFeeSelectedStudents);
-      setNewFeeTitle(""); setNewFeeAmount(""); setNewFeeDueDate(""); 
-      setNewFeeIsGlobal(true); setNewFeeSelectedStudents([]);
-      setIsMobileFormOpen(false);
-      setAlertConfig({ isOpen: true, type: "success", title: "Cobro Creado", message: "El cobro se ha asignado correctamente." });
-    } catch {
-      setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo crear." });
-    } finally { setIsSubmitting(false); }
+      setNewFeeTitle(""); setNewFeeAmount(""); setNewFeeDueDate(""); setNewFeeIsGlobal(true); setNewFeeSelectedStudents([]); setIsMobileFormOpen(false);
+      setAlertConfig({ isOpen: true, type: "success", title: "Cobro Creado", message: "Asignado correctamente." });
+    } catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "No se pudo crear." }); } 
+    finally { setIsSubmitting(false); }
   };
 
   const triggerDeleteFee = (id: string) => {
     setConfirmConfig({
-      isOpen: true, title: "¿Eliminar Cobro?", message: "Se borrará de los paneles asignados. ¿Continuar?",
-      onConfirm: async () => {
-        try { await deleteExtraFee(id); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } 
-        catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Asegúrate que no tenga pagos." }); }
-      }
+      isOpen: true, title: "¿Eliminar Cobro?", message: "Se borrará de los paneles. ¿Continuar?",
+      onConfirm: async () => { try { await deleteExtraFee(id); setConfirmConfig(prev => ({ ...prev, isOpen: false })); } catch { setAlertConfig({ isOpen: true, type: "error", title: "Error", message: "Asegúrate que no tenga pagos." }); } }
     });
   };
-
-  const filteredVerifiedPayments = verifiedPayments.filter(p => {
-    if (!cashSearchTerm) return true;
-    const term = cashSearchTerm.toLowerCase();
-    const studentName = p.student ? `${p.student.firstName} ${p.student.lastName}`.toLowerCase() : "sin asignar";
-    const conceptName = p.quotaNumber ? `cuota ${MONTHS_MAP[p.quotaNumber]}`.toLowerCase() : (p.extraFee?.title?.toLowerCase() || "");
-    return studentName.includes(term) || conceptName.includes(term);
-  });
 
   const filteredExtraFees = extraFees.filter(f => {
     if (!feeSearchTerm) return true;
@@ -301,15 +274,15 @@ export default function AdminRevenueClient({
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center gap-4"><div className="p-3 bg-white text-emerald-600 rounded-xl shadow-sm"><TrendingUp size={24} /></div><div><span className="text-xs text-emerald-700 font-semibold uppercase tracking-wider block">Total Recaudado</span><span className="text-2xl font-black text-emerald-900">${totalRecaudadoCuotas.toLocaleString("es-CL")}</span></div></div>
+            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center gap-4"><div className="p-3 bg-white text-emerald-600 rounded-xl shadow-sm"><TrendingUp size={24} /></div><div><span className="text-xs text-emerald-700 font-semibold uppercase tracking-wider block">Total Recaudado (Cuotas)</span><span className="text-2xl font-black text-emerald-900">${totalRecaudadoCuotas.toLocaleString("es-CL")}</span></div></div>
             <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex items-center gap-4"><div className="p-3 bg-white text-brand-navy rounded-xl shadow-sm"><CreditCard size={24} /></div><div><span className="text-xs text-gray-500 font-semibold uppercase tracking-wider block">Meta Presupuestada</span><span className="text-2xl font-black text-brand-navy">${totalPresupuestadoEsperado.toLocaleString("es-CL")}</span></div></div>
-            <div className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center gap-4"><div className="p-3 bg-white text-red-600 rounded-xl shadow-sm"><AlertCircle size={24} /></div><div><span className="text-xs text-red-700 font-semibold uppercase tracking-wider block">Saldo Pendiente</span><span className="text-2xl font-black text-red-900">${totalPorCobrarPendiente.toLocaleString("es-CL")}</span></div></div>
+            <div className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center gap-4"><div className="p-3 bg-white text-red-600 rounded-xl shadow-sm"><AlertCircle size={24} /></div><div><span className="text-xs text-red-700 font-semibold uppercase tracking-wider block">Saldo Pendiente (Cuotas)</span><span className="text-2xl font-black text-red-900">${totalPorCobrarPendiente.toLocaleString("es-CL")}</span></div></div>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm max-w-xl space-y-4">
             <h3 className="text-base font-bold text-brand-navy">Fondos Disponibles por Medio de Pago</h3>
             <div className="divide-y divide-gray-50">
               <div className="flex justify-between py-3 text-sm"><span className="text-gray-500 flex items-center gap-2"><Wallet size={16} className="text-blue-500" /> Cuenta Banco</span><span className="font-bold text-gray-900">${totalCajaBanco.toLocaleString("es-CL")}</span></div>
-              <div className="flex justify-between py-3 text-sm"><span className="text-gray-500 flex items-center gap-2"><DollarSign size={16} className="text-amber-500" /> Caja Física</span><span className="font-bold text-gray-900">${totalCajaEfectivo.toLocaleString("es-CL")}</span></div>
+              <div className="flex justify-between py-3 text-sm"><span className="text-gray-500 flex items-center gap-2"><DollarSign size={16} className="text-amber-500" /> Caja Física (Incluye Pro-Fondos)</span><span className="font-bold text-gray-900">${(totalCajaEfectivo + totalIngresosGenerales).toLocaleString("es-CL")}</span></div>
               <div className="flex justify-between pt-4 pb-1 text-base font-black border-t-2 border-gray-100"><span className="text-brand-navy">Total Neto Disponible</span><span className="text-brand-navy">${totalGeneralEnCaja.toLocaleString("es-CL")}</span></div>
             </div>
           </div>
@@ -351,100 +324,119 @@ export default function AdminRevenueClient({
         const studentVerified = verifiedPayments.filter(p => p.studentId === cashStudentId);
         const paidQuotasForStudent = [...studentPending.filter(p => p.quotaNumber !== null).map(p => p.quotaNumber as number), ...studentVerified.filter(p => p.quotaNumber !== null).map(p => p.quotaNumber as number)];
         const paidExtrasForStudent = [...studentPending.filter(p => p.extraFeeId !== null).map(p => p.extraFeeId as string), ...studentVerified.filter(p => p.extraFeeId !== null).map(p => p.extraFeeId as string)];
-        
         const selectedStudent = students.find(s => s.id === cashStudentId);
         const startQuota = selectedStudent?.startQuotaNumber || 1;
-
-        // FILTRO UX: Mostrar solo cobros extras globales O asignados a este alumno
         const availableExtraFees = extraFees.filter(f => f.isGlobal || f.assignedStudents?.some(s => s.id === cashStudentId));
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
             <div className="lg:col-span-1 h-fit lg:sticky lg:top-6 flex flex-col gap-4">
-              <button type="button" onClick={() => setIsMobileFormOpen(!isMobileFormOpen)} className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm"><Plus size={18} /> Ingresar Pago en Caja</button>
+              <button type="button" onClick={() => setIsMobileFormOpen(!isMobileFormOpen)} className="flex lg:hidden! w-full bg-brand-navy text-white py-3 rounded-xl font-bold items-center justify-center gap-2 shadow-sm"><Plus size={18} /> Ingreso a Caja</button>
               
-              <form onSubmit={handleRegisterCash} className={`bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 transition-all lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
-                <div><h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><UserCheck size={20} className="text-brand-accent" /> Ingreso Manual</h3></div>
+              <form onSubmit={handleRegisterIncome} className={`bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 transition-all lg:block! ${isMobileFormOpen ? 'block' : 'hidden'}`}>
+                <div><h3 className="text-lg font-bold text-brand-navy flex items-center gap-2"><UserCheck size={20} className="text-brand-accent" /> Registro de Caja</h3></div>
                 
-                <div className="space-y-4 border-t border-gray-50 pt-4">
-                  <div className="space-y-1.5"><label className="text-xs font-bold text-gray-500 uppercase">Fecha del Pago</label><input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 bg-white" /></div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Vía</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button" onClick={() => setPaymentMethod("EFECTIVO")} className={`py-2 px-3 text-xs font-bold rounded-xl border flex justify-center gap-2 items-center ${paymentMethod === "EFECTIVO" ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-white text-gray-500"}`}><DollarSign size={14}/> Efectivo</button>
-                      <button type="button" onClick={() => setPaymentMethod("TRANSFERENCIA MANUAL")} className={`py-2 px-3 text-xs font-bold rounded-xl border flex justify-center gap-2 items-center ${paymentMethod === "TRANSFERENCIA MANUAL" ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "bg-white text-gray-500"}`}><Landmark size={14}/> Banco</button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Alumno(a)</label>
-                    <select value={cashStudentId} onChange={(e) => { setCashStudentId(e.target.value); setCashQuotas([]); setCashExtras([]); }} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 bg-white">
-                      <option value="">-- Seleccionar --</option>
-                      {students.map(s => <option key={s.id} value={s.id}>🎓 {s.lastName}, {s.firstName}</option>)}
-                    </select>
-                  </div>
+                {/* SELECTOR DE TIPO DE INGRESO */}
+                <div className="grid grid-cols-2 gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                  <button type="button" onClick={() => setIncomeType("STUDENT")} className={`py-1.5 text-xs font-bold rounded-lg transition-all ${incomeType === "STUDENT" ? "bg-white text-brand-navy shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>🎓 Pago de Alumno</button>
+                  <button type="button" onClick={() => setIncomeType("GENERAL")} className={`py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${incomeType === "GENERAL" ? "bg-white text-emerald-600 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}><PackageOpen size={14}/> Fondo Común</button>
                 </div>
 
-                {cashStudentId && (
-                  <>
-                    <div className="space-y-2 border-t border-gray-50 pt-3">
-                      <label className="text-xs font-bold text-gray-500 uppercase block">Cuotas a Regularizar (${activeYear.quotaAmount})</label>
-                      <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                        {Array.from({ length: activeYear.totalQuotas }).map((_, i) => {
-                          const qNum = i + 1; const isChecked = cashQuotas.includes(qNum); const isAlreadyPaid = paidQuotasForStudent.includes(qNum); const isExempt = qNum < startQuota;
-                          return (
-                            <button key={qNum} type="button" disabled={isAlreadyPaid || isExempt} onClick={() => setCashQuotas(isChecked ? cashQuotas.filter(q => q !== qNum) : [...cashQuotas, qNum])} className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all disabled:cursor-not-allowed ${isExempt ? "bg-gray-50 text-gray-400 opacity-60" : isAlreadyPaid ? "bg-gray-50 text-emerald-600" : isChecked ? "bg-brand-navy text-white border-brand-navy" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
-                              <span>{MONTHS_MAP[qNum]}</span>
-                              {isAlreadyPaid && !isExempt && <Check size={14} className="text-emerald-500 stroke-[3]" />}
-                              {isExempt && <Minus size={14} className="text-gray-400 stroke-[3]" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {availableExtraFees.length > 0 && (
-                      <div className="space-y-2 border-t border-gray-50 pt-3">
-                        <label className="text-xs font-bold text-gray-500 uppercase block">Cobros Extraordinarios</label>
-                        <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
-                          {availableExtraFees.map(f => {
-                            const isChecked = cashExtras.includes(f.id); const isAlreadyPaid = paidExtrasForStudent.includes(f.id);
-                            return (
-                              <div key={f.id} onClick={() => !isAlreadyPaid && setCashExtras(isChecked ? cashExtras.filter(id => id !== f.id) : [...cashExtras, f.id])} className={`flex items-center justify-between p-2 rounded-xl border text-xs font-semibold ${isAlreadyPaid ? "bg-gray-50 opacity-40 cursor-not-allowed" : "cursor-pointer"} ${isChecked ? "bg-brand-navy/5 border-brand-navy text-brand-navy" : "bg-white text-gray-600"}`}>
-                                <div className="flex items-center gap-2"><input type="checkbox" checked={isChecked || isAlreadyPaid} disabled={isAlreadyPaid} onChange={() => {}} className="rounded text-brand-navy" /> <span className="truncate">{f.title}</span></div>
-                                <span className="font-bold ml-2">${f.amount}</span>
-                              </div>
-                            );
-                          })}
+                <div className="space-y-4 border-t border-gray-50 pt-4">
+                  <div className="space-y-1.5"><label className="text-xs font-bold text-gray-500 uppercase">Fecha del Ingreso</label><input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 bg-white" /></div>
+                  
+                  {incomeType === "STUDENT" && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Vía</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button type="button" onClick={() => setPaymentMethod("EFECTIVO")} className={`py-2 px-3 text-xs font-bold rounded-xl border flex justify-center gap-2 items-center ${paymentMethod === "EFECTIVO" ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-white text-gray-500"}`}><DollarSign size={14}/> Efectivo</button>
+                          <button type="button" onClick={() => setPaymentMethod("TRANSFERENCIA MANUAL")} className={`py-2 px-3 text-xs font-bold rounded-xl border flex justify-center gap-2 items-center ${paymentMethod === "TRANSFERENCIA MANUAL" ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "bg-white text-gray-500"}`}><Landmark size={14}/> Banco</button>
                         </div>
                       </div>
-                    )}
-                    <button type="submit" disabled={isSubmitting || (cashQuotas.length === 0 && cashExtras.length === 0)} className="w-full py-2.5 bg-brand-accent text-brand-navy font-bold rounded-xl text-sm shadow-md disabled:bg-gray-100 disabled:text-gray-400">{isSubmitting ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Guardar Pago"}</button>
-                  </>
-                )}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Alumno(a)</label>
+                        <select value={cashStudentId} onChange={(e) => { setCashStudentId(e.target.value); setCashQuotas([]); setCashExtras([]); }} required={incomeType === "STUDENT"} className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 bg-white">
+                          <option value="">-- Seleccionar --</option>
+                          {students.map(s => <option key={s.id} value={s.id}>🎓 {s.lastName}, {s.firstName}</option>)}
+                        </select>
+                      </div>
+
+                      {cashStudentId && (
+                        <>
+                          <div className="space-y-2 border-t border-gray-50 pt-3">
+                            <label className="text-xs font-bold text-gray-500 uppercase block">Cuotas a Regularizar (${activeYear.quotaAmount})</label>
+                            <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                              {Array.from({ length: activeYear.totalQuotas }).map((_, i) => {
+                                const qNum = i + 1; const isChecked = cashQuotas.includes(qNum); const isAlreadyPaid = paidQuotasForStudent.includes(qNum); const isExempt = qNum < startQuota;
+                                return (
+                                  <button key={qNum} type="button" disabled={isAlreadyPaid || isExempt} onClick={() => setCashQuotas(isChecked ? cashQuotas.filter(q => q !== qNum) : [...cashQuotas, qNum])} className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all disabled:cursor-not-allowed ${isExempt ? "bg-gray-50 text-gray-400 opacity-60" : isAlreadyPaid ? "bg-gray-50 text-emerald-600" : isChecked ? "bg-brand-navy text-white border-brand-navy" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                                    <span>{MONTHS_MAP[qNum]}</span>
+                                    {isAlreadyPaid && !isExempt && <Check size={14} className="text-emerald-500 stroke-[3]" />}
+                                    {isExempt && <Minus size={14} className="text-gray-400 stroke-[3]" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {availableExtraFees.length > 0 && (
+                            <div className="space-y-2 border-t border-gray-50 pt-3">
+                              <label className="text-xs font-bold text-gray-500 uppercase block">Cobros Extraordinarios</label>
+                              <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                {availableExtraFees.map(f => {
+                                  const isChecked = cashExtras.includes(f.id); const isAlreadyPaid = paidExtrasForStudent.includes(f.id);
+                                  return (
+                                    <div key={f.id} onClick={() => !isAlreadyPaid && setCashExtras(isChecked ? cashExtras.filter(id => id !== f.id) : [...cashExtras, f.id])} className={`flex items-center justify-between p-2 rounded-xl border text-xs font-semibold ${isAlreadyPaid ? "bg-gray-50 opacity-40 cursor-not-allowed" : "cursor-pointer"} ${isChecked ? "bg-brand-navy/5 border-brand-navy text-brand-navy" : "bg-white text-gray-600"}`}>
+                                      <div className="flex items-center gap-2"><input type="checkbox" checked={isChecked || isAlreadyPaid} disabled={isAlreadyPaid} onChange={() => {}} className="rounded text-brand-navy" /> <span className="truncate">{f.title}</span></div>
+                                      <span className="font-bold ml-2">${f.amount}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {incomeType === "GENERAL" && (
+                    <div className="space-y-4 animate-fade-in">
+                      <div className="space-y-1.5"><label className="text-xs font-bold text-emerald-700 uppercase">Concepto (Ej: Venta de Rifa)</label><input type="text" value={generalConcept} onChange={(e) => setGeneralConcept(e.target.value)} required={incomeType === "GENERAL"} placeholder="Detalle del ingreso..." className="w-full px-3 py-2 text-sm rounded-xl border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/30" /></div>
+                      <div className="space-y-1.5"><label className="text-xs font-bold text-emerald-700 uppercase">Monto Total Recaudado ($)</label><input type="number" value={generalAmount} onChange={(e) => setGeneralAmount(e.target.value)} required={incomeType === "GENERAL"} min="1" placeholder="Ej: 15000" className="w-full px-3 py-2 text-sm rounded-xl border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/30 font-black" /></div>
+                    </div>
+                  )}
+
+                </div>
+
+                <button type="submit" disabled={isSubmitting || (incomeType === "STUDENT" && cashQuotas.length === 0 && cashExtras.length === 0)} className={`w-full py-2.5 font-bold rounded-xl text-sm shadow-md transition-all disabled:bg-gray-100 disabled:text-gray-400 ${incomeType === "STUDENT" ? "bg-brand-accent text-brand-navy hover:opacity-90" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin mx-auto" /> : (incomeType === "STUDENT" ? "Guardar Pago" : "Sumar al Fondo Común")}
+                </button>
               </form>
             </div>
 
             <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between gap-3"><div className="font-bold text-sm text-brand-navy flex items-center gap-2"><span>📜 Libro de Caja Principal</span></div><div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Buscar..." value={cashSearchTerm} onChange={(e) => setCashSearchTerm(e.target.value)} className="w-full sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white" /></div></div>
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between gap-3"><div className="font-bold text-sm text-brand-navy flex items-center gap-2"><span>📜 Libro de Caja Unificado</span></div><div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Buscar concepto o alumno..." value={cashSearchTerm} onChange={(e) => setCashSearchTerm(e.target.value)} className="w-full sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white" /></div></div>
               <div className="overflow-x-auto flex-1 h-full min-h-[400px]">
-                {filteredVerifiedPayments.length === 0 ? (
+                {filteredLedger.length === 0 ? (
                   <div className="p-12 text-center text-gray-400 italic text-sm">Libro de caja vacío.</div>
                 ) : (
                   <table className="w-full text-left border-collapse text-xs">
-                    <thead className="bg-white text-gray-400 font-bold border-b border-gray-100 sticky top-0"><tr className="shadow-sm"><th className="p-3">Fecha</th><th className="p-3">Alumno</th><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Vía</th><th className="p-3 text-center">Acciones</th></tr></thead>
+                    <thead className="bg-white text-gray-400 font-bold border-b border-gray-100 sticky top-0"><tr className="shadow-sm"><th className="p-3">Fecha</th><th className="p-3">Referencia</th><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Vía</th><th className="p-3 text-center">Acciones</th></tr></thead>
                     <tbody className="divide-y divide-gray-50 text-gray-600">
-                      {filteredVerifiedPayments.map(p => (
-                        <tr key={p.id} className="hover:bg-gray-50/30">
-                          <td className="p-3 text-[11px] font-medium text-gray-500">{new Date(p.date).toLocaleDateString("es-CL", { timeZone: 'UTC' })}</td>
-                          <td className="p-3 font-bold text-brand-navy">🎓 {p.student?.firstName} {p.student?.lastName}</td>
-                          <td className="p-3 font-medium">{p.quotaNumber ? `Cuota ${MONTHS_MAP[p.quotaNumber]}` : p.extraFee?.title}</td>
-                          <td className="p-3 font-black text-gray-900">${p.amount.toLocaleString("es-CL")}</td>
+                      {filteredLedger.map(item => (
+                        <tr key={item.id} className={item.type === "GENERAL" ? "bg-emerald-50/20 hover:bg-emerald-50/50" : "hover:bg-gray-50/30"}>
+                          <td className="p-3 text-[11px] font-medium text-gray-500">{new Date(item.date).toLocaleDateString("es-CL", { timeZone: 'UTC' })}</td>
+                          <td className={`p-3 font-bold ${item.type === "GENERAL" ? "text-emerald-700" : "text-brand-navy"}`}>{item.studentName}</td>
+                          <td className="p-3 font-medium">{item.concept}</td>
+                          <td className={`p-3 font-black ${item.type === "GENERAL" ? "text-emerald-600" : "text-gray-900"}`}>${item.amount.toLocaleString("es-CL")}</td>
                           <td className="p-3">
-                            {p.receiptUrl === "EFECTIVO" ? <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-amber-50 text-amber-700">💵 EFECTIVO</span> :
-                             p.receiptUrl === "TRANSFERENCIA MANUAL" ? <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-emerald-50 text-emerald-700">🏦 TRANSF. (M)</span> :
-                             <button type="button" onClick={() => setReceiptModalUrl(p.receiptUrl)} className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-blue-50 text-blue-700 hover:underline"><Eye size={10} className="inline"/> COMPROBANTE</button>}
+                            {item.method === "EFECTIVO" || item.type === "GENERAL" ? <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-amber-50 text-amber-700">💵 EFECTIVO</span> :
+                             item.method === "TRANSFERENCIA MANUAL" ? <span className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-emerald-50 text-emerald-700">🏦 TRANSF. (M)</span> :
+                             item.method ? <button type="button" onClick={() => setReceiptModalUrl(item.method as string)} className="px-2 py-0.5 rounded-md font-bold text-[9px] border bg-blue-50 text-blue-700 hover:underline"><Eye size={10} className="inline"/> COMPROB.</button> : null}
                           </td>
-                          <td className="p-3 flex justify-center"><button onClick={() => triggerDeletePayment(p.id)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg">{processingId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button></td>
+                          <td className="p-3 flex justify-center"><button onClick={() => triggerDeleteLedgerItem(item.type, item.realId)} disabled={processingId !== null} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg">{processingId === item.realId ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -456,7 +448,7 @@ export default function AdminRevenueClient({
         );
       })()}
 
-      {/* --- PESTAÑA 4: GESTIÓN DE COBROS EXTRAS (ACTUALIZADA) --- */}
+      {/* --- PESTAÑA 4: GESTIÓN DE COBROS EXTRAS --- */}
       {activeTab === "fees" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
           
@@ -530,14 +522,6 @@ export default function AdminRevenueClient({
                       </div>
                       <h4 className="text-sm font-bold text-brand-navy">{fee.title}</h4>
                       {fee.dueDate && <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1 mt-0.5"><Calendar size={12} /> Vence el {new Date(fee.dueDate).toLocaleDateString("es-CL", { timeZone: 'UTC' })}</span>}
-                      
-                      {!fee.isGlobal && fee.assignedStudents && fee.assignedStudents.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {fee.assignedStudents.map(s => (
-                            <span key={s.id} className="text-[9px] font-semibold text-gray-500 bg-white border border-gray-200 px-1.5 py-0.5 rounded">🎓 {s.firstName} {s.lastName.charAt(0)}.</span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     <div className="flex items-center gap-4 self-end sm:self-auto">
                       <span className="text-base font-black text-brand-navy">${fee.amount.toLocaleString("es-CL")}</span>

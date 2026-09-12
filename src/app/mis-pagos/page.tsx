@@ -25,12 +25,25 @@ export default async function MisPagosPage() {
 
   if (!dbUser) redirect("/login");
 
+  const studentIds = dbUser.students.map(student => student.id);
+
   // 2. Obtener el año escolar activo con sus cobros y gastos
   const activeYear = await prisma.schoolYear.findFirst({
     where: { isActive: true },
     include: {
+      // SOLUCIÓN: Filtramos desde la BD para que solo traiga los cobros que aplican a esta familia
       extraFees: {
+        where: {
+          OR: [
+            { isGlobal: true },
+            { assignedStudents: { some: { id: { in: studentIds } } } }
+          ]
+        },
         orderBy: { dueDate: "asc" },
+        include: {
+          // Necesitamos traer los IDs de los alumnos asignados para filtrar en el cliente
+          assignedStudents: { select: { id: true } }
+        }
       },
       expenses: {
         orderBy: { date: "desc" },
@@ -45,8 +58,6 @@ export default async function MisPagosPage() {
       </div>
     );
   }
-
-  const studentIds = dbUser.students.map(student => student.id);
 
   // 3. PAGOS DEL USUARIO (Para las cuotas mensuales e historial del apoderado)
   const myPayments = studentIds.length > 0 
@@ -63,16 +74,14 @@ export default async function MisPagosPage() {
       })
     : [];
 
-  // 4. --- LA SOLUCIÓN AQUÍ ---
-  // Consultamos TODOS los pagos verificados del curso de forma global para la caja de transparencia
+  // 4. Consultamos TODOS los pagos verificados del curso de forma global para la caja de transparencia
   const allVerifiedPayments = await prisma.payment.findMany({
     where: {
       schoolYearId: activeYear.id,
-      isVerified: true, // Solo lo que ya entró a caja y fue aprobado
+      isVerified: true, 
     },
     select: {
       amount: true,
-      // Solo traemos el monto y el estado de verificación para que la consulta sea ultra rápida
       isVerified: true, 
     }
   });
@@ -89,8 +98,8 @@ export default async function MisPagosPage() {
       <PaymentDashboard 
         activeYear={activeYear}
         students={dbUser.students}
-        payments={myPayments} // Para las cuotas individuales del alumno
-        allCoursePayments={allVerifiedPayments} // <-- PASAMOS LOS INGRESOS GLOBALES
+        payments={myPayments} 
+        allCoursePayments={allVerifiedPayments} 
         expenses={activeYear.expenses}
         currentUserId={dbUser.id}
       />

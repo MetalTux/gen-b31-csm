@@ -18,7 +18,7 @@ export default async function AdminIngresosPage() {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (user?.role !== "ADMIN") redirect("/");
 
-  // CORRECCIÓN: Eliminamos el orderBy inválido para que Prisma resuelva los tipos correctamente
+  // Buscamos el año activo e incluimos cobros extra e ingresos generales
   const activeYear = await prisma.schoolYear.findFirst({ 
     where: { isActive: true },
     include: { 
@@ -28,7 +28,10 @@ export default async function AdminIngresosPage() {
             select: { id: true, firstName: true, lastName: true }
           }
         }
-      } 
+      },
+      generalIncomes: { // <-- NUEVA RELACIÓN INCLUIDA
+        orderBy: { date: "desc" }
+      }
     }
   });
 
@@ -73,6 +76,7 @@ export default async function AdminIngresosPage() {
         pendingPayments={pendingPayments}
         verifiedPayments={verifiedPayments}
         extraFees={activeYear.extraFees}
+        generalIncomes={activeYear.generalIncomes} // <-- PASAMOS LA NUEVA DATA AL CLIENTE
       />
     </main>
   );
