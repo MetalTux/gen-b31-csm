@@ -1,13 +1,9 @@
 // src/app/actions/activity.ts
 "use server";
 
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { revalidatePath } from "next/cache";
 import { UTApi } from "uploadthing/server"; // <-- Herramienta oficial de borrado en la nube
-
-const pgAdapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-const prisma = new PrismaClient({ adapter: pgAdapter });
+import { prisma } from "@/lib/prisma";
 const utapi = new UTApi(); // Inicializamos el recolector de basura
 
 /**

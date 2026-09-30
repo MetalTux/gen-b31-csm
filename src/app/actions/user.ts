@@ -3,14 +3,9 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient, Role, BoardPosition, Prisma } from "@prisma/client"; 
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { Role, BoardPosition, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const pgAdapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter: pgAdapter });
+import { prisma } from "@/lib/prisma";
 
 interface UserInput {
   name: string;

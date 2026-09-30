@@ -57,7 +57,7 @@ export default function Sidebar({ userRole }: { userRole: string }) {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed top-4 left-4 z-40 p-2.5 bg-brand-navy text-white rounded-xl shadow-xl hover:bg-opacity-95 active:scale-95 transition-all cursor-pointer animate-fade-in"
+          className="fixed top-[calc(1rem+env(safe-area-inset-top))] left-4 z-40 p-2.5 bg-brand-navy text-white rounded-xl shadow-xl hover:bg-opacity-95 active:scale-95 transition-all cursor-pointer animate-fade-in"
           aria-label="Abrir menú de navegación"
         >
           <Menu size={24} />
@@ -73,17 +73,19 @@ export default function Sidebar({ userRole }: { userRole: string }) {
         />
       )}
 
-      {/* CONTENEDOR DEL SIDEBAR */}
+      {/* CONTENEDOR DEL SIDEBAR
+          h-dvh (100dvh) en vez de h-screen (100vh): en Android 100vh no descuenta la barra
+          del navegador y el pie del menú (Cerrar Sesión) quedaba fuera de la pantalla */}
       <aside 
         className={`
-          fixed top-0 left-0 z-50 h-screen bg-brand-navy text-white flex flex-col 
+          fixed top-0 left-0 z-50 h-dvh bg-brand-navy text-white flex flex-col 
           transition-all duration-300 ease-in-out shadow-2xl overflow-hidden shrink-0
           ${isOpen ? "w-64 translate-x-0" : "w-0 -translate-x-full md:translate-x-0 md:w-0 md:shadow-none"}
           md:relative
         `}
       >
         {/* ENCABEZADO DEL MENÚ */}
-        <div className="p-4 border-b border-white/10 bg-black/20 shrink-0 flex flex-col relative">
+        <div className="p-4 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10 bg-black/20 shrink-0 flex flex-col relative">
           <div className="w-full flex justify-end mb-2">
             <button 
               type="button"
@@ -178,8 +180,8 @@ export default function Sidebar({ userRole }: { userRole: string }) {
           )}
         </nav>
 
-        {/* BOTÓN CERRAR SESIÓN */}
-        <div className="p-4 border-t border-white/10 shrink-0 bg-black/10">
+        {/* BOTÓN CERRAR SESIÓN (con margen extra para la barra de navegación del teléfono) */}
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 shrink-0 bg-black/10">
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/login" })}

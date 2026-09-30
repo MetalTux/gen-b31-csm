@@ -1,17 +1,11 @@
 // src/app/actions/inquiry.ts
 "use server";
 
-import { PrismaClient, InquiryCategory } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { InquiryCategory } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-
-// Configuración de Prisma compatible con Neon (Ajusta esto si usas un archivo centralizado de Prisma)
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "@/lib/prisma";
 
 /**
  * Crea una nueva consulta en el sistema.

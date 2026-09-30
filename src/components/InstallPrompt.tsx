@@ -17,20 +17,22 @@ export default function InstallPrompt() {
       setShowPrompt(true); // Mostramos nuestro propio diseño
     };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-
     // Si el usuario instala la app, ocultamos el botón
-    window.addEventListener("appinstalled", () => {
+    const handleAppInstalled = () => {
       setShowPrompt(false);
       setDeferredPrompt(null);
       console.log("¡Aplicación instalada con éxito!");
-    });
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
       );
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
@@ -57,24 +59,27 @@ export default function InstallPrompt() {
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 animate-fade-in">
-      <div className="bg-brand-navy text-white p-4 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-white/10 p-2 rounded-xl">
+    // Arriba para no tapar la lectura. En móviles empieza a la derecha del botón
+    // hamburguesa (left-[4.5rem]); en escritorio queda arriba a la derecha.
+    // z-30: el menú lateral abierto y su fondo oscuro (z-40/z-50) quedan por encima.
+    <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] left-[4.5rem] right-4 md:left-auto md:w-96 z-30 animate-fade-in">
+      <div className="bg-brand-navy text-white px-3 py-2 sm:p-3 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="hidden sm:block bg-white/10 p-2 rounded-xl shrink-0">
             <Download size={20} className="text-brand-accent" />
           </div>
-          <div>
-            <h4 className="text-sm font-bold">Instalar Portal CSM</h4>
-            <p className="text-xs text-gray-300">
+          <div className="min-w-0">
+            <h4 className="text-sm font-bold truncate">Instalar Portal CSM</h4>
+            <p className="hidden sm:block text-xs text-gray-300 truncate">
               Accede más rápido desde tu inicio
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={handleInstallClick}
-            className="px-4 py-2 bg-brand-accent text-brand-navy text-xs font-bold rounded-xl shadow-sm hover:opacity-90 transition-all"
+            className="px-3 sm:px-4 py-2 bg-brand-accent text-brand-navy text-xs font-bold rounded-xl shadow-sm hover:opacity-90 transition-all"
           >
             Instalar
           </button>

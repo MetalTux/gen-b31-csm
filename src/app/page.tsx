@@ -1,9 +1,6 @@
 // src/app/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import Link from "next/link";
 import { MessageSquare, ArrowRight } from "lucide-react";
 
@@ -11,11 +8,7 @@ import ActivityForm from "@/components/ActivityForm";
 import ActivityCard from "@/components/ActivityCard";
 import PollWidget from "@/components/PollWidget";
 import UpcomingEventsWidget from "@/components/UpcomingEventsWidget";
-
-// --- CONFIGURACIÓN DE BASE DE DATOS (NEON) ---
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const pgAdapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter: pgAdapter });
+import { prisma } from "@/lib/prisma";
 
 export default async function Home() {
   // 1. Autenticación y Validación de Usuario

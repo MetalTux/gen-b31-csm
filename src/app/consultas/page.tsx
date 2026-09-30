@@ -1,15 +1,9 @@
 // src/app/consultas/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { redirect } from "next/navigation";
 import InquiryClient from "./InquiryClient";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const pgAdapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter: pgAdapter });
+import { prisma } from "@/lib/prisma";
 
 export default async function ConsultasPage() {
   const session = await getServerSession(authOptions);

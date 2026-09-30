@@ -3,14 +3,8 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { revalidatePath } from "next/cache";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const pgAdapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter: pgAdapter });
+import { prisma } from "@/lib/prisma";
 
 interface CreateYearInput {
   year: number;

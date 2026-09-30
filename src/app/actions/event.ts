@@ -1,17 +1,11 @@
 // src/app/actions/event.ts
 "use server";
 
-import { PrismaClient, EventCategory } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { EventCategory } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-
-// Configuración de Prisma compatible con Neon
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "@/lib/prisma";
 
 // Interfaz reutilizable para los datos del evento
 interface EventData {

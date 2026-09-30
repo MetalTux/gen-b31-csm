@@ -2,20 +2,10 @@
 
 import { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg"; // <-- Importamos Pool para el adaptador de Prisma
 import EmailProvider from "next-auth/providers/email";
 import type { Adapter } from "next-auth/adapters"; 
 import CredentialsProvider from "next-auth/providers/credentials";
-
-// Inicializamos el Pool de conexiones correctamente para Neon/PostgreSQL
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const pgAdapter = new PrismaPg(pool);
-
-const prisma = new PrismaClient({ 
-  adapter: pgAdapter 
-});
+import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,

@@ -5,8 +5,7 @@ import "./globals.css";
 import "@uploadthing/react/styles.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
 import PwaRegister from "@/components/PwaRegister";
@@ -23,6 +22,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Permite usar env(safe-area-inset-*) para no quedar bajo las barras del sistema
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -66,12 +67,6 @@ export default async function RootLayout({
       </html>
     );
   }
-
-  // CONEXIÓN BD
-  const pgAdapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL!,
-  });
-  const prisma = new PrismaClient({ adapter: pgAdapter });
 
   const dbUser = await prisma.user.findUnique({
     where: { email: session.user.email },

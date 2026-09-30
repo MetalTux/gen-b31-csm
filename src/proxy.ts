@@ -29,8 +29,10 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Mantenemos tu matcher que filtra assets pesados, APIs e imágenes
+  // Excluimos APIs, assets y los archivos de la PWA (manifest y service worker):
+  // el navegador los pide SIN cookie de sesión, y si se redirigen al login
+  // Chrome no puede leer el manifest ni registrar el SW, y la app no es instalable.
   matcher: [
-    '/((?!api|_next/static|_next/image|.*\\.png$|.*\\.ico$).*)',
+    '/((?!api|_next/static|_next/image|manifest\\.webmanifest$|sw\\.js$|offline\\.html$|.*\\.(?:png|ico|svg|jpg|jpeg|webp)$).*)',
   ],
 };
