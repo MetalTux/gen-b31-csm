@@ -5,14 +5,24 @@ import { useEffect } from "react";
 
 export default function PwaRegister() {
   useEffect(() => {
-    // Verificamos si el navegador del celular soporta esta tecnología
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.error("Fallo al registrar el Service Worker:", err);
-      });
+    // Nos aseguramos de que el código solo corra en el cliente y que el navegador soporte Service Workers
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
+          console.log(
+            "✅ PWA Service Worker registrado con éxito. Scope:",
+            registration.scope,
+          );
+        })
+        .catch((error) => {
+          console.error(
+            "❌ Fallo al registrar el Service Worker de la PWA:",
+            error,
+          );
+        });
     }
   }, []);
 
-  // Es un componente "invisible", solo ejecuta lógica
-  return null; 
+  return null;
 }
