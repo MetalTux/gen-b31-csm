@@ -15,13 +15,25 @@ export default function manifest(): MetadataRoute.Manifest {
         src: "/icon-192x192.png",
         sizes: "192x192",
         type: "image/png",
-        purpose: "any", // <-- Aceptado por TypeScript: Para uso general
+        purpose: "any",
+      },
+      {
+        src: "/icon-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
       },
       {
         src: "/icon-512x512.png",
         sizes: "512x512",
         type: "image/png",
-        purpose: "maskable", // <-- Aceptado por TypeScript: Cumple la auditoría de Android
+        purpose: "any",
+      },
+      {
+        src: "/icon-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   };

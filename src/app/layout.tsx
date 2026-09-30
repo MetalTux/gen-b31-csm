@@ -11,6 +11,9 @@ import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
 import PwaRegister from "@/components/PwaRegister";
 
+// --- NUEVO: Importamos nuestro componente de Banner de Instalación ---
+import InstallPrompt from "@/components/InstallPrompt";
+
 const inter = Inter({ subsets: ["latin"] });
 
 // Configuración estricta de vista para dispositivos móviles
@@ -22,8 +25,6 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-// SOLUCIÓN: Eliminamos manifest: "/manifest.json" de aquí.
-// Al usar src/app/manifest.ts, Next.js lo enlazará automáticamente y sin errores 404.
 export const metadata: Metadata = {
   title: "Portal Apoderados CSM",
   description: "Plataforma de comunicación y gestión financiera",
@@ -47,17 +48,22 @@ export default async function RootLayout({
   if (!session?.user?.email) {
     return (
       <html lang="es">
-        <body className={`${inter.className} bg-brand-light`} suppressHydrationWarning>
+        <body
+          className={`${inter.className} bg-brand-light`}
+          suppressHydrationWarning
+        >
           <PwaRegister />
-          <Providers>
-            {children}
-          </Providers>
+          {/* --- NUEVO: Banner inyectado para la vista sin sesión (Login) --- */}
+          <InstallPrompt />
+          <Providers>{children}</Providers>
         </body>
       </html>
     );
   }
 
-  const pgAdapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const pgAdapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL!,
+  });
   const prisma = new PrismaClient({ adapter: pgAdapter });
 
   const dbUser = await prisma.user.findUnique({
@@ -70,8 +76,12 @@ export default async function RootLayout({
     <html lang="es">
       <body className={inter.className} suppressHydrationWarning>
         <PwaRegister />
+        {/* --- NUEVO: Banner inyectado para la plataforma interna --- */}
+        <InstallPrompt />
         <Providers>
-          <div className="flex h-screen overflow-hidden bg-brand-light">
+          {/* --- SOLUCIÓN VISUAL MÓVIL: Cambiamos h-screen por h-[100dvh] --- */}
+          {/* Esto asegura que la altura respete las barras del navegador móvil */}
+          <div className="flex h-[100dvh] overflow-hidden bg-brand-light">
             <Sidebar userRole={userRole} />
             <main className="flex-1 overflow-y-auto w-full p-4 pt-20 md:p-8 md:pt-8">
               {children}
