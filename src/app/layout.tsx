@@ -10,13 +10,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
 import PwaRegister from "@/components/PwaRegister";
-
-// --- NUEVO: Importamos nuestro componente de Banner de Instalación ---
 import InstallPrompt from "@/components/InstallPrompt";
+
+// 1. IMPORTAMOS EL PACKAGE.JSON DIRECTAMENTE
+import packageJson from "../../package.json";
 
 const inter = Inter({ subsets: ["latin"] });
 
-// Configuración estricta de vista para dispositivos móviles
 export const viewport: Viewport = {
   themeColor: "#1e293b",
   width: "device-width",
@@ -45,6 +45,7 @@ export default async function RootLayout({
 }>) {
   const session = await getServerSession(authOptions);
 
+  // VISTA SIN SESIÓN
   if (!session?.user?.email) {
     return (
       <html lang="es">
@@ -53,14 +54,20 @@ export default async function RootLayout({
           suppressHydrationWarning
         >
           <PwaRegister />
-          {/* --- NUEVO: Banner inyectado para la vista sin sesión (Login) --- */}
           <InstallPrompt />
           <Providers>{children}</Providers>
+          {/* Etiqueta de versión visual */}
+          <div className="fixed bottom-2 right-2 z-[60] pointer-events-none opacity-50">
+            <span className="bg-gray-800 text-white text-[10px] font-mono px-2 py-1 rounded-md shadow-sm">
+              v{packageJson.version}
+            </span>
+          </div>
         </body>
       </html>
     );
   }
 
+  // CONEXIÓN BD
   const pgAdapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL!,
   });
@@ -72,22 +79,29 @@ export default async function RootLayout({
 
   const userRole = dbUser?.role ?? "USER";
 
+  // VISTA CON SESIÓN
   return (
     <html lang="es">
       <body className={inter.className} suppressHydrationWarning>
         <PwaRegister />
-        {/* --- NUEVO: Banner inyectado para la plataforma interna --- */}
         <InstallPrompt />
         <Providers>
-          {/* --- SOLUCIÓN VISUAL MÓVIL: Cambiamos h-screen por h-[100dvh] --- */}
-          {/* Esto asegura que la altura respete las barras del navegador móvil */}
-          <div className="flex h-[100dvh] overflow-hidden bg-brand-light">
+          {/* 3. SOLUCIÓN BOTÓN TAPADO: Usamos "fixed inset-0" en lugar de alturas.
+              Esto ancla el contenedor exactamente a las 4 esquinas reales de la pantalla */}
+          <div className="fixed inset-0 flex bg-brand-light overflow-hidden">
             <Sidebar userRole={userRole} />
-            <main className="flex-1 overflow-y-auto w-full p-4 pt-20 md:p-8 md:pt-8">
+            <main className="flex-1 overflow-y-auto w-full p-4 pt-20 pb-20 md:p-8 md:pt-8 md:pb-8">
               {children}
             </main>
           </div>
         </Providers>
+
+        {/* 2. Etiqueta de versión visual dentro de la app */}
+        <div className="fixed bottom-2 right-2 z-[60] pointer-events-none opacity-50">
+          <span className="bg-gray-800 text-white text-[10px] font-mono px-2 py-1 rounded-md shadow-sm">
+            v{packageJson.version}
+          </span>
+        </div>
       </body>
     </html>
   );

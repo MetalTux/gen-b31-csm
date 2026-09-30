@@ -1,16 +1,24 @@
 // public/sw.js
 
+// Siempre que subas algo importante a Vercel, asegúrate de cambiar la versión
+// en tu package.json. Al cambiar el código fuente de tu proyecto,
+// este archivo también se refrescará gracias a la regla que pusimos arriba.
+
 self.addEventListener("install", (event) => {
+  // Obliga al nuevo Service Worker a instalarse de inmediato, ignorando al viejo
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(clients.claim());
+  // Toma el control de la aplicación de inmediato y limpia clientes viejos
+  event.waitUntil(self.clients.claim());
 });
 
-// SOLUCIÓN: Los navegadores exigen que exista el evento 'fetch' para habilitar el botón "Instalar".
 self.addEventListener("fetch", (event) => {
-  // Retornamos la petición de red normal para que tu app siga funcionando online sin problemas,
-  // pero al interceptar el evento, superamos la validación de seguridad de Google Chrome.
-  event.respondWith(fetch(event.request));
+  // Estrategia Network-First (Primero la red):
+  // Intenta siempre ir a Vercel a buscar los datos frescos.
+  // Solo usa la caché en caso de que el usuario no tenga internet.
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(event.request)),
+  );
 });
